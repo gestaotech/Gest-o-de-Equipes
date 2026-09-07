@@ -995,6 +995,11 @@ body {
     color: #555;
 }
 
+.member-tag-info {
+    color: var(--muted);
+    font-size: 0.72rem;
+}
+
 .team-meta {
     margin-top: 12px;
     font-size: 0.82rem;
@@ -1548,6 +1553,27 @@ body {
     border: 1.5px solid var(--border);
     border-radius: 4px;
     font-size: 0.85rem;
+}
+
+.tag-field select {
+    max-width: 260px;
+    padding: 8px 10px;
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    font-size: 0.85rem;
+    background: #fff;
+}
+
+.tag-item-info {
+    font-style: normal;
+    font-size: 0.75rem;
+    opacity: 0.75;
+}
+
+.tag-hint {
+    margin-top: 8px;
+    font-size: 0.78rem;
+    line-height: 1.4;
 }
 
 .btn-tag-add {

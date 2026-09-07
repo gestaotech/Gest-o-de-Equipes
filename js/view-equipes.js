@@ -8,6 +8,7 @@ registrarView('equipes', {
     async render(container) {
         const equipes = await getEquipes();
         const projetos = await getProjetos();
+        const pessoal = await getPessoal();
 
         // Toolbar
         const toolbar = document.createElement('div');
@@ -48,7 +49,10 @@ registrarView('equipes', {
                                 <h4>Membros (${e.membros ? e.membros.length : 0})</h4>
                                 <div class="member-tags">
                                     ${e.membros && e.membros.length > 0
-                                        ? e.membros.map(n => `<span class="member-tag">${esc(n)}</span>`).join('')
+                                        ? e.membros.map(n => {
+                                            const p = pessoal.find(x => x.nome === n);
+                                            return `<span class="member-tag">${esc(n)}${p ? ` <span class="member-tag-info">${esc(p.cargo || p.funcao || p.departamento || '')}</span>` : ''}</span>`;
+                                        }).join('')
                                         : '<span class="muted">Nenhum membro</span>'
                                     }
                                 </div>
@@ -73,7 +77,7 @@ registrarView('equipes', {
         busca.addEventListener('input', () => renderLista(busca.value));
 
         // Nova equipe
-        container.querySelector('#btn-nova-equipe').addEventListener('click', () => abrirModalEquipe(null, equipes, renderLista));
+        container.querySelector('#btn-nova-equipe').addEventListener('click', () => abrirModalEquipe(null, equipes, renderLista, pessoal));
 
         // Delegar ações
         listaDiv.addEventListener('click', async (e) => {
@@ -82,7 +86,7 @@ registrarView('equipes', {
 
             if (btnEdit) {
                 const equipe = equipes.find(x => x.id === btnEdit.dataset.edit);
-                abrirModalEquipe(equipe, equipes, renderLista);
+                abrirModalEquipe(equipe, equipes, renderLista, pessoal);
             }
 
             if (btnDel) {
@@ -100,10 +104,9 @@ registrarView('equipes', {
 });
 
 // Abre o modal de criação/edição de equipe
-function abrirModalEquipe(equipe, equipes, depois) {
+function abrirModalEquipe(equipe, equipes, depois, pessoal = []) {
     const modal = criarModal(equipe ? 'Editar Equipe' : 'Nova Equipe');
     const membros = equipe ? [...(equipe.membros || [])] : [];
-    let novoMembro = '';
 
     modal.body.innerHTML = `
         <form id="form-equipe">
@@ -121,20 +124,27 @@ function abrirModalEquipe(equipe, equipes, depois) {
             </div>
             <div class="form-group">
                 <label>Líder da equipe</label>
-                <input type="text" id="eq-lider" value="${esc(equipe ? equipe.lider : '')}">
+                <input type="text" id="eq-lider" list="eq-lider-list" value="${esc(equipe ? equipe.lider : '')}" placeholder="Escolha do Pessoal ou digite">
+                <datalist id="eq-lider-list">
+                    ${pessoal.map(p => `<option value="${esc(p.nome)}">`).join('')}
+                </datalist>
             </div>
             <div class="form-group">
                 <label>Descrição</label>
                 <textarea id="eq-desc" rows="3">${esc(equipe ? equipe.descricao : '')}</textarea>
             </div>
             <div class="form-group">
-                <label>Membros da equipe</label>
+                <label>Membros da equipe (do Pessoal)</label>
                 <div class="modal-tags">
                     <div class="tag-list" id="eq-tags"></div>
                     <div class="tag-field">
-                        <input type="text" id="eq-membro" placeholder="Nome do membro">
+                        <select id="eq-membro-select">
+                            <option value="">Selecione do Pessoal...</option>
+                        </select>
+                        <input type="text" id="eq-membro" placeholder="ou digite um nome">
                         <button type="button" class="btn btn-tag-add" id="eq-add">+</button>
                     </div>
+                    ${pessoal.length === 0 ? '<p class="muted tag-hint">Nenhum funcionário no Pessoal. Cadastre na aba <strong>Pessoal</strong> ou digite nomes manualmente.</p>' : ''}
                 </div>
             </div>
             <div class="modal-actions">
@@ -146,13 +156,55 @@ function abrirModalEquipe(equipe, equipes, depois) {
 
     function renderMembros() {
         const $tags = modal.body.querySelector('#eq-tags');
-        $tags.innerHTML = membros.map((m, i) => `
-            <span class="tag-item">${esc(m)} <button type="button" class="tag-remove" data-i="${i}">&times;</button></span>
-        `).join('');
+        $tags.innerHTML = membros.map((m, i) => {
+            const p = pessoal.find(x => x.nome === m);
+            return `
+                <span class="tag-item">${esc(m)}${p && p.departamento ? ` <em class="tag-item-info">${esc(p.departamento)}</em>` : ''}
+                    <button type="button" class="tag-remove" data-i="${i}">&times;</button>
+                </span>
+            `;
+        }).join('');
     }
-    renderMembros();
 
-    // Adicionar membro
+    function renderMembrosSelect() {
+        const $sel = modal.body.querySelector('#eq-membro-select');
+        if (!$sel) return;
+        const dep = modal.body.querySelector('#eq-dep').value;
+        let disponiveis = pessoal.filter(p => !membros.includes(p.nome));
+        if (dep) {
+            const doDept = disponiveis.filter(p => p.departamento === dep);
+            const outros = disponiveis.filter(p => p.departamento !== dep);
+            disponiveis = doDept.concat(outros);
+        }
+        $sel.innerHTML = '<option value="">' + (disponiveis.length ? 'Selecionar do Pessoal...' : 'Nenhum funcionário disponível') + '</option>' +
+            disponiveis.map(p => `<option value="${esc(p.nome)}">${esc(p.nome)} — ${esc(p.cargo || p.funcao || 'sem cargo')}${p.departamento ? ' (' + esc(p.departamento) + ')' : ''}</option>`).join('');
+    }
+
+    renderMembros();
+    renderMembrosSelect();
+
+    // Adiciona membro selecionado do Pessoal
+    const $sel = modal.body.querySelector('#eq-membro-select');
+    $sel.addEventListener('change', () => {
+        const v = $sel.value;
+        if (!v) return;
+        if (membros.includes(v)) { toast('Membro já adicionado', 'erro'); return; }
+        membros.push(v);
+        // Sincroniza departamento: se a equipe não tem, herda o do funcionário
+        const p = pessoal.find(x => x.nome === v);
+        if (p && p.departamento) {
+            const $dep = modal.body.querySelector('#eq-dep');
+            if (!$dep.value) $dep.value = p.departamento;
+        }
+        $sel.value = '';
+        renderMembros();
+        renderMembrosSelect();
+    });
+
+    // Ao trocar o departamento, atualiza a lista de funcionários sugeridos
+    modal.body.querySelector('#eq-dep').addEventListener('change', renderMembrosSelect);
+
+    // Adicionar membro digitado
     const $input = modal.body.querySelector('#eq-membro');
     function addMembro() {
         const v = $input.value.trim();
@@ -161,6 +213,7 @@ function abrirModalEquipe(equipe, equipes, depois) {
         membros.push(v);
         $input.value = '';
         renderMembros();
+        renderMembrosSelect();
         $input.focus();
     }
     modal.body.querySelector('#eq-add').addEventListener('click', addMembro);
@@ -172,6 +225,7 @@ function abrirModalEquipe(equipe, equipes, depois) {
         if (btn) {
             membros.splice(parseInt(btn.dataset.i), 1);
             renderMembros();
+            renderMembrosSelect();
         }
     });
 
