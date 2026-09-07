@@ -1010,6 +1010,87 @@ body {
     flex-wrap: wrap;
 }
 
+/* ============ PESSOAL ============ */
+.pessoal-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+}
+
+.pessoa-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    transition: box-shadow 0.2s;
+}
+
+.pessoa-card:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.pessoa-avatar {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1.1rem;
+}
+
+.pessoa-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.pessoa-header h3 {
+    font-size: 1rem;
+    color: #333;
+    margin-bottom: 6px;
+}
+
+.pessoa-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.badge.cargo {
+    background: var(--primary-light);
+    color: var(--primary);
+}
+
+.badge.funcao {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.pessoa-dep,
+.pessoa-email,
+.pessoa-phone {
+    font-size: 0.82rem;
+    color: var(--muted);
+    margin-bottom: 4px;
+}
+
+.pessoa-dep strong { color: #555; }
+
+.pessoa-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
 /* ============ BADGES ============ */
 .badge {
     display: inline-block;
@@ -2025,7 +2106,8 @@ body {
     }
 
     .teams-grid,
-    .projetos-grid {
+    .projetos-grid,
+    .pessoal-grid {
         grid-template-columns: 1fr;
     }
 

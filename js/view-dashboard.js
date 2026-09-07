@@ -9,11 +9,13 @@ registrarView('dashboard', {
         const equipes = await getEquipes();
         const projetos = await getProjetos();
         const tarefas = await getTarefas();
+        const pessoal = await getPessoal();
         const notificacoes = await getNotificacoes();
         const user = getCurrentUser();
 
         const totalEquipes = equipes.length;
         const totalProjetos = projetos.length;
+        const totalFuncionarios = pessoal.length;
         const totalMembros = equipes.reduce((acc, e) => acc + (e.membros ? e.membros.length : 0), 0);
 
         const emAndamento = projetos.filter(p => p.status === 'em_andamento').length;
@@ -26,6 +28,7 @@ registrarView('dashboard', {
         const proximas = notificacoes.filter(n => n.severidade === 'proximo').length;
 
         const cards = [
+            { icone: '👤', valor: totalFuncionarios, rotulo: 'Funcionários' },
             { icone: '👥', valor: totalEquipes, rotulo: 'Equipes' },
             { icone: '📋', valor: totalProjetos, rotulo: 'Projetos' },
             { icone: '🧑‍🤝‍🧑', valor: totalMembros, rotulo: 'Membros' },

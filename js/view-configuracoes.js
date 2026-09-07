@@ -10,6 +10,7 @@ registrarView('configuracoes', {
         const equipes = await getEquipes();
         const projetos = await getProjetos();
         const tarefas = await getTarefas();
+        const pessoal = await getPessoal();
 
         container.innerHTML = `
             <div class="config-grid">
@@ -22,7 +23,7 @@ registrarView('configuracoes', {
 
                 <div class="config-card">
                     <h3>📊 Resumo dos dados</h3>
-                    <p>${equipes.length} equipe(s) · ${projetos.length} projeto(s) · ${tarefas.length} tarefa(s)</p>
+                    <p>${equipes.length} equipe(s) · ${projetos.length} projeto(s) · ${tarefas.length} tarefa(s) · ${pessoal.length} funcionário(s)</p>
                 </div>
 
                 <div class="config-card">
@@ -94,11 +95,23 @@ registrarView('configuracoes', {
                 { label: 'Comentários', get: t => (t.comentarios || []).map(c => c.autor + ': ' + c.texto).join(' | ') }
             ]);
 
-            // Cria um único arquivo com 3 seções
+            const pessoalCSV = paraCSV(pessoal, [
+                { label: 'ID', get: p => p.id },
+                { label: 'Nome', get: p => p.nome },
+                { label: 'Cargo', get: p => p.cargo || '' },
+                { label: 'Função', get: p => p.funcao || '' },
+                { label: 'Departamento', get: p => p.departamento || '' },
+                { label: 'E-mail', get: p => p.email || '' },
+                { label: 'Telefone', get: p => p.telefone || '' },
+                { label: 'Criado em', get: p => p.criadoEm || '' }
+            ]);
+
+            // Cria um único arquivo com as seções
             const conteudo =
                 '=== EQUIPES ===\n' + equipesCSV +
                 '\n\n=== PROJETOS ===\n' + projetosCSV +
-                '\n\n=== TAREFAS ===\n' + tarefasCSV;
+                '\n\n=== TAREFAS ===\n' + tarefasCSV +
+                '\n\n=== PESSOAL ===\n' + pessoalCSV;
 
             const nome = `gestao-${new Date().toISOString().slice(0, 10)}.csv`;
             downloadTexto(conteudo, nome, 'text/csv;charset=utf-8');
@@ -134,6 +147,7 @@ registrarView('configuracoes', {
             await dbSet(`user:${uid}:equipes`, []);
             await dbSet(`user:${uid}:projetos`, []);
             await dbSet(`user:${uid}:tarefas`, []);
+            await dbSet(`user:${uid}:pessoal`, []);
             toast('Dados apagados!', 'erro');
             setTimeout(() => location.reload(), 800);
         });

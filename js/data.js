@@ -40,6 +40,33 @@ async function excluirEquipe(id) {
     await dbSet(dataKey('equipes'), nova);
 }
 
+// ======================== PESSOAL ========================
+
+async function getPessoal() {
+    const data = await dbGet(dataKey('pessoal'));
+    return data || [];
+}
+
+async function salvarPessoa(pessoa) {
+    const pessoal = await getPessoal();
+    if (pessoa.id) {
+        const idx = pessoal.findIndex(p => p.id === pessoa.id);
+        if (idx !== -1) pessoal[idx] = pessoa;
+    } else {
+        pessoa.id = genId();
+        pessoa.criadoEm = new Date().toISOString();
+        pessoal.push(pessoa);
+    }
+    await dbSet(dataKey('pessoal'), pessoal);
+    return pessoa;
+}
+
+async function excluirPessoa(id) {
+    const pessoal = await getPessoal();
+    const nova = pessoal.filter(p => p.id !== id);
+    await dbSet(dataKey('pessoal'), nova);
+}
+
 // ======================== PROJETOS ========================
 
 async function getProjetos() {
@@ -291,6 +318,7 @@ async function exportarTudo() {
     const equipes = await getEquipes();
     const projetos = await getProjetos();
     const tarefas = await getTarefas();
+    const pessoal = await getPessoal();
 
     return {
         versao: 1,
@@ -301,7 +329,8 @@ async function exportarTudo() {
         },
         equipes,
         projetos,
-        tarefas
+        tarefas,
+        pessoal
     };
 }
 
@@ -315,4 +344,7 @@ async function importarTudo(dados) {
     await dbSet(dataKey('equipes'), dados.equipes);
     await dbSet(dataKey('projetos'), dados.projetos);
     await dbSet(dataKey('tarefas'), dados.tarefas);
+    if (Array.isArray(dados.pessoal)) {
+        await dbSet(dataKey('pessoal'), dados.pessoal);
+    }
 }
