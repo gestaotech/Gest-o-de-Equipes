@@ -50,13 +50,13 @@ registrarView('tarefas', {
         container.appendChild(listaDiv);
 
         if (filtroProjeto) {
-            container.querySelector('#filtro-projeto').value = filtroProjeto;
+            (container.querySelector('#filtro-projeto') as HTMLSelectElement).value = filtroProjeto;
         }
 
         function renderLista() {
-            const busca = container.querySelector('#busca-tarefas').value;
-            const proj = container.querySelector('#filtro-projeto').value;
-            const st = container.querySelector('#filtro-tarefa-status').value;
+            const busca = (container.querySelector('#busca-tarefas') as HTMLInputElement).value;
+            const proj = (container.querySelector('#filtro-projeto') as HTMLSelectElement).value;
+            const st = (container.querySelector('#filtro-tarefa-status') as HTMLSelectElement).value;
 
             let filtradas = buscar(tarefas, busca, ['titulo', 'descricao', 'responsavel']);
             if (proj) filtradas = filtradas.filter(t => t.projetoId === proj);
@@ -97,9 +97,9 @@ registrarView('tarefas', {
                                         let atrasoBadge = '';
                                         if (t.prazo && t.status !== 'concluido') {
                                             const prazo = new Date(t.prazo + 'T00:00:00');
-                                            if (!isNaN(prazo) && prazo < hoje) {
+                                            if (!isNaN(prazo.getTime()) && prazo.getTime() < hoje.getTime()) {
                                                 atrasoBadge = '<span class="badge-atrasado">⚠ Atrasada</span>';
-                                            } else if (!isNaN(prazo) && prazo - hoje < 3 * 86400000) {
+                                            } else if (!isNaN(prazo.getTime()) && prazo.getTime() - hoje.getTime() < 3 * 86400000) {
                                                 atrasoBadge = '<span class="badge-proximo">⏰ Próx.</span>';
                                             }
                                         }
@@ -132,31 +132,32 @@ registrarView('tarefas', {
 
         renderLista();
 
-        container.querySelector('#busca-tarefas').addEventListener('input', renderLista);
-        container.querySelector('#filtro-projeto').addEventListener('change', renderLista);
-        container.querySelector('#filtro-tarefa-status').addEventListener('change', renderLista);
-        container.querySelector('#btn-nova-tarefa').addEventListener('click', () => abrirModalTarefa(null, tarefas, projetos, nomesDisponiveis, renderLista));
+        (container.querySelector('#busca-tarefas') as HTMLInputElement).addEventListener('input', renderLista);
+        (container.querySelector('#filtro-projeto') as HTMLSelectElement).addEventListener('change', renderLista);
+        (container.querySelector('#filtro-tarefa-status') as HTMLSelectElement).addEventListener('change', renderLista);
+        container.querySelector('#btn-nova-tarefa')!.addEventListener('click', () => abrirModalTarefa(null, tarefas, projetos, nomesDisponiveis, renderLista));
 
         listaDiv.addEventListener('click', async (e) => {
-            const btnAbrir = e.target.closest('[data-abrir]');
-            const btnEdit = e.target.closest('[data-edit]');
-            const btnDel = e.target.closest('[data-del]');
-            const btnMove = e.target.closest('[data-move]');
+            const target = e.target as HTMLElement;
+            const btnAbrir = target.closest('[data-abrir]') as HTMLElement | null;
+            const btnEdit = target.closest('[data-edit]') as HTMLElement | null;
+            const btnDel = target.closest('[data-del]') as HTMLElement | null;
+            const btnMove = target.closest('[data-move]') as HTMLElement | null;
 
             if (btnAbrir) {
-                abrirModalDetalhes(btnAbrir.dataset.abrir, tarefas, projetos, nomesDisponiveis, () => {
+                abrirModalDetalhes(btnAbrir.dataset.abrir!, tarefas, projetos, nomesDisponiveis, () => {
                     renderLista();
                     atualizarIndicadorNotificacoes();
                 });
             }
 
             if (btnEdit) {
-                const t = tarefas.find(x => x.id === btnEdit.dataset.edit);
-                abrirModalTarefa(t, tarefas, projetos, nomesDisponiveis, renderLista);
+                const t = tarefas.find(x => x.id === btnEdit!.dataset.edit);
+                abrirModalTarefa(t || null, tarefas, projetos, nomesDisponiveis, renderLista);
             }
 
             if (btnDel) {
-                const id = btnDel.dataset.del;
+                const id = btnDel!.dataset.del!;
                 if (confirm('Excluir esta tarefa? Comentários e anexos também serão removidos.')) {
                     await excluirTarefa(id);
                     tarefas.splice(tarefas.findIndex(x => x.id === id), 1);
@@ -167,11 +168,11 @@ registrarView('tarefas', {
             }
 
             if (btnMove) {
-                const id = btnMove.dataset.move;
-                const to = btnMove.dataset.to;
+                const id = btnMove!.dataset.move!;
+                const to = btnMove!.dataset.to!;
                 await atualizarStatusTarefa(id, to);
                 const t = tarefas.find(x => x.id === id);
-                if (t) t.status = to;
+                if (t) t.status = to as StatusTarefa;
                 renderLista();
             }
         });
@@ -184,7 +185,7 @@ registrarView('tarefas', {
 // MODAL DE EDIÇÃO RÁPIDA (CRUD simples)
 // ============================================================
 
-function abrirModalTarefa(tarefa, tarefas, projetos, nomesDisponiveis, depois) {
+function abrirModalTarefa(tarefa: Tarefa | null, tarefas: Tarefa[], projetos: Projeto[], nomesDisponiveis: string[], depois?: () => void): void {
     const modal = criarModal(tarefa ? 'Editar Tarefa' : 'Nova Tarefa');
 
     modal.body.innerHTML = `
@@ -234,17 +235,17 @@ function abrirModalTarefa(tarefa, tarefas, projetos, nomesDisponiveis, depois) {
         </form>
     `;
 
-    modal.body.querySelector('#tf-cancel').addEventListener('click', modal.fechar);
+    (modal.body.querySelector('#tf-cancel') as HTMLButtonElement).addEventListener('click', modal.fechar);
 
-    modal.body.querySelector('#form-tarefa').addEventListener('submit', async (e) => {
+    (modal.body.querySelector('#form-tarefa') as HTMLFormElement).addEventListener('submit', async (e) => {
         e.preventDefault();
-        const dados = {
-            titulo: modal.body.querySelector('#tf-titulo').value.trim(),
-            projetoId: modal.body.querySelector('#tf-projeto').value,
-            responsavel: modal.body.querySelector('#tf-responsavel').value.trim(),
-            status: modal.body.querySelector('#tf-status').value,
-            prazo: modal.body.querySelector('#tf-prazo').value,
-            descricao: modal.body.querySelector('#tf-desc').value.trim()
+        const dados: Omit<Tarefa, 'id' | 'criadoEm' | 'comentarios' | 'anexos'> = {
+            titulo: (modal.body.querySelector('#tf-titulo') as HTMLInputElement).value.trim(),
+            projetoId: (modal.body.querySelector('#tf-projeto') as HTMLSelectElement).value,
+            responsavel: (modal.body.querySelector('#tf-responsavel') as HTMLInputElement).value.trim(),
+            status: (modal.body.querySelector('#tf-status') as HTMLSelectElement).value as StatusTarefa,
+            prazo: (modal.body.querySelector('#tf-prazo') as HTMLInputElement).value,
+            descricao: (modal.body.querySelector('#tf-desc') as HTMLTextAreaElement).value.trim()
         };
         if (!dados.titulo) { toast('Título é obrigatório', 'erro'); return; }
 
@@ -254,7 +255,7 @@ function abrirModalTarefa(tarefa, tarefas, projetos, nomesDisponiveis, depois) {
             await salvarTarefa(tarefas[idx]);
             toast('Tarefa atualizada!');
         } else {
-            const nova = await salvarTarefa(dados);
+            const nova = await salvarTarefa(dados as any);
             tarefas.push(nova);
             toast('Tarefa criada!');
         }
@@ -267,7 +268,7 @@ function abrirModalTarefa(tarefa, tarefas, projetos, nomesDisponiveis, depois) {
 // MODAL DE DETALHES (abas: Detalhes / Comentários / Anexos)
 // ============================================================
 
-async function abrirModalDetalhes(tarefaId, tarefas, projetos, nomesDisponiveis, depois) {
+async function abrirModalDetalhes(tarefaId: string, tarefas: Tarefa[], projetos: Projeto[], nomesDisponiveis: string[], depois?: () => void): Promise<void> {
     let tarefa = tarefas.find(t => t.id === tarefaId);
     if (!tarefa) return;
 
@@ -363,58 +364,60 @@ async function abrirModalDetalhes(tarefaId, tarefas, projetos, nomesDisponiveis,
             <div class="tab-content" id="tab-content"></div>
         `;
 
-        const tabContent = modal.body.querySelector('#tab-content');
+        const tabContent = modal.body.querySelector('#tab-content') as HTMLElement;
 
-        function mostrarAba(aba) {
-            modal.body.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === aba));
+        function mostrarAba(aba: string) {
+            modal.body.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', (t as HTMLElement).dataset.tab === aba));
             if (aba === 'detalhes') tabContent.innerHTML = renderAbaDetalhes();
             else if (aba === 'comentarios') tabContent.innerHTML = renderAbaComentarios();
             else if (aba === 'anexos') { tabContent.innerHTML = renderAbaAnexos(); carregarAnexos(); }
         }
 
         modal.body.querySelectorAll('.tab').forEach(t => {
-            t.addEventListener('click', () => mostrarAba(t.dataset.tab));
+            t.addEventListener('click', () => mostrarAba((t as HTMLElement).dataset.tab || ''));
         });
 
         // Delegação para ações dentro do conteúdo
         tabContent.addEventListener('click', async (e) => {
-            const delCom = e.target.closest('[data-del-coment]');
+            const target = e.target as HTMLElement;
+            const delCom = target.closest('[data-del-coment]') as HTMLElement | null;
             if (delCom) {
                 if (confirm('Excluir este comentário?')) {
-                    await excluirComentario(tarefa.id, delCom.dataset.delComent);
+                    await excluirComentario(tarefa.id, delCom.dataset.delComent!);
                     const t = tarefas.find(x => x.id === tarefa.id);
-                    tarefa = { ...tarefa, comentarios: (t.comentarios || []).filter(c => c.id !== delCom.dataset.delComent) };
+                    tarefa = { ...tarefa, comentarios: (tarefa.comentarios || []).filter(c => c.id !== delCom.dataset.delComent) } as Tarefa;
                     if (t) t.comentarios = tarefa.comentarios;
                     render();
-                    modal.body.querySelectorAll('.tab')[1].click();
+                    (modal.body.querySelectorAll('.tab')[1] as HTMLElement).click();
                     if (depois) depois();
                 }
             }
-            const delAnex = e.target.closest('[data-del-anexo]');
+            const delAnex = target.closest('[data-del-anexo]') as HTMLElement | null;
             if (delAnex) {
                 if (confirm('Excluir este anexo?')) {
-                    await excluirAnexo(tarefa.id, delAnex.dataset.delAnexo);
+                    await excluirAnexo(tarefa.id, delAnex.dataset.delAnexo!);
+                    tarefa.anexos = tarefa.anexos || [];
                     tarefa.anexos = tarefa.anexos.filter(a => a.id !== delAnex.dataset.delAnexo);
                     const t = tarefas.find(x => x.id === tarefa.id);
                     if (t) t.anexos = tarefa.anexos;
                     render();
-                    modal.body.querySelectorAll('.tab')[2].click();
+                    (modal.body.querySelectorAll('.tab')[2] as HTMLElement).click();
                     if (depois) depois();
                 }
             }
-            const dlAnex = e.target.closest('[data-download]');
+            const dlAnex = target.closest('[data-download]') as HTMLElement | null;
             if (dlAnex) {
-                const blob = await obterBlobAnexo(tarefa.id, dlAnex.dataset.download);
-                const a = tarefa.anexos.find(x => x.id === dlAnex.dataset.download);
+                const blob = await obterBlobAnexo(tarefa.id, dlAnex.dataset.download!);
+                const a = (tarefa.anexos || []).find(x => x.id === dlAnex.dataset.download);
                 if (blob && a) downloadBlob(blob, a.nome);
             }
-            const thumb = e.target.closest('[data-anexo]');
+            const thumb = target.closest('[data-anexo]') as HTMLElement | null;
             if (thumb) {
                 if (thumb.dataset.tipo && thumb.dataset.tipo.startsWith('image/')) {
-                    const blob = await obterBlobAnexo(tarefa.id, thumb.dataset.anexo);
+                    const blob = await obterBlobAnexo(tarefa.id, thumb.dataset.anexo!);
                     if (blob) {
                         const url = URL.createObjectURL(blob);
-                        abrirLightbox(url, thumb.alt);
+                        abrirLightbox(url, (thumb as HTMLImageElement).alt);
                     }
                 }
             }
@@ -422,8 +425,9 @@ async function abrirModalDetalhes(tarefaId, tarefas, projetos, nomesDisponiveis,
 
         // Form de novo comentário
         tabContent.addEventListener('click', async (e) => {
-            if (e.target.id === 'btn-add-comentario') {
-                const ta = tabContent.querySelector('#novo-comentario');
+            const target = e.target as HTMLElement;
+            if (target.id === 'btn-add-comentario') {
+                const ta = tabContent.querySelector('#novo-comentario') as HTMLTextAreaElement;
                 const texto = ta.value.trim();
                 if (!texto) return;
                 const novo = await adicionarComentario(tarefa.id, texto);
@@ -432,18 +436,19 @@ async function abrirModalDetalhes(tarefaId, tarefas, projetos, nomesDisponiveis,
                 const tArr = tarefas.find(x => x.id === tarefa.id);
                 if (tArr) tArr.comentarios = tarefa.comentarios;
                 render();
-                modal.body.querySelectorAll('.tab')[1].click();
+                (modal.body.querySelectorAll('.tab')[1] as HTMLElement).click();
                 if (depois) depois();
             }
         });
 
         // Upload de anexos
-        const inputAnexo = tabContent.querySelector('#input-anexo');
+        const inputAnexo = tabContent.querySelector('#input-anexo') as HTMLInputElement;
         if (inputAnexo) {
             inputAnexo.addEventListener('change', async (e) => {
-                const files = Array.from(e.target.files || []);
+                const input = e.target as HTMLInputElement;
+                const files = Array.from(input.files || []);
                 if (!files.length) return;
-                const status = tabContent.querySelector('#upload-status');
+                const status = tabContent.querySelector('#upload-status') as HTMLElement;
                 status.textContent = `Enviando ${files.length} arquivo(s)...`;
 
                 for (const f of files) {
@@ -453,14 +458,14 @@ async function abrirModalDetalhes(tarefaId, tarefas, projetos, nomesDisponiveis,
                         tarefa.anexos.push(a);
                         const tArr = tarefas.find(x => x.id === tarefa.id);
                         if (tArr) tArr.anexos = tarefa.anexos;
-                    } catch (err) {
+                    } catch (err: any) {
                         toast('Erro ao enviar: ' + f.name, 'erro');
                     }
                 }
                 status.textContent = '';
                 inputAnexo.value = '';
                 render();
-                modal.body.querySelectorAll('.tab')[2].click();
+                (modal.body.querySelectorAll('.tab')[2] as HTMLElement).click();
                 toast('Anexos enviados!');
                 if (depois) depois();
             });

@@ -119,11 +119,12 @@ registrarView('configuracoes', {
         });
 
         // Importar
-        container.querySelector('#input-import').addEventListener('change', async (e) => {
-            const file = e.target.files[0];
+        (container.querySelector('#input-import') as HTMLInputElement).addEventListener('change', async (e) => {
+            const input = e.target as HTMLInputElement;
+            const file = input.files ? input.files[0] : null;
             if (!file) return;
             if (!confirm('Importar substituirá os dados atuais. Continuar?')) {
-                e.target.value = '';
+                input.value = '';
                 return;
             }
             try {
@@ -132,10 +133,10 @@ registrarView('configuracoes', {
                 await importarTudo(dados);
                 toast('Dados importados com sucesso!');
                 setTimeout(() => location.reload(), 800);
-            } catch (err) {
-                toast('Erro: ' + err.message, 'erro');
+            } catch (err: any) {
+                toast('Erro: ' + (err as Error).message, 'erro');
             } finally {
-                e.target.value = '';
+                input.value = '';
             }
         });
 

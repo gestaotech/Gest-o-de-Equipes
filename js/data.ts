@@ -3,24 +3,24 @@
 // Todos os dados são escopados por usuário
 // ============================================================
 
-function dataKey(type) {
-    const uid = getCurrentUser().uid;
+function dataKey(type: string): string {
+    const uid = getCurrentUser()!.uid;
     return `user:${uid}:${type}`;
 }
 
 // Gera id único
-function genId() {
+function genId(): string {
     return Date.now().toString(36) + '-' + Math.random().toString(36).substr(2, 9);
 }
 
 // ======================== EQUIPES ========================
 
-async function getEquipes() {
+async function getEquipes(): Promise<Equipe[]> {
     const data = await dbGet(dataKey('equipes'));
     return data || [];
 }
 
-async function salvarEquipe(equipe) {
+async function salvarEquipe(equipe: Equipe): Promise<Equipe> {
     const equipes = await getEquipes();
     if (equipe.id) {
         const idx = equipes.findIndex(e => e.id === equipe.id);
@@ -34,7 +34,7 @@ async function salvarEquipe(equipe) {
     return equipe;
 }
 
-async function excluirEquipe(id) {
+async function excluirEquipe(id: string): Promise<void> {
     const equipes = await getEquipes();
     const nova = equipes.filter(e => e.id !== id);
     await dbSet(dataKey('equipes'), nova);
@@ -42,12 +42,12 @@ async function excluirEquipe(id) {
 
 // ======================== PESSOAL ========================
 
-async function getPessoal() {
+async function getPessoal(): Promise<Pessoa[]> {
     const data = await dbGet(dataKey('pessoal'));
     return data || [];
 }
 
-async function salvarPessoa(pessoa) {
+async function salvarPessoa(pessoa: Pessoa): Promise<Pessoa> {
     const pessoal = await getPessoal();
     if (pessoa.id) {
         const idx = pessoal.findIndex(p => p.id === pessoa.id);
@@ -61,7 +61,7 @@ async function salvarPessoa(pessoa) {
     return pessoa;
 }
 
-async function excluirPessoa(id) {
+async function excluirPessoa(id: string): Promise<void> {
     const pessoal = await getPessoal();
     const nova = pessoal.filter(p => p.id !== id);
     await dbSet(dataKey('pessoal'), nova);
@@ -69,12 +69,12 @@ async function excluirPessoa(id) {
 
 // ======================== PROJETOS ========================
 
-async function getProjetos() {
+async function getProjetos(): Promise<Projeto[]> {
     const data = await dbGet(dataKey('projetos'));
     return data || [];
 }
 
-async function salvarProjeto(projeto) {
+async function salvarProjeto(projeto: Projeto): Promise<Projeto> {
     const projetos = await getProjetos();
     if (projeto.id) {
         const idx = projetos.findIndex(p => p.id === projeto.id);
@@ -88,7 +88,7 @@ async function salvarProjeto(projeto) {
     return projeto;
 }
 
-async function excluirProjeto(id) {
+async function excluirProjeto(id: string): Promise<void> {
     const projetos = await getProjetos();
     const nova = projetos.filter(p => p.id !== id);
     await dbSet(dataKey('projetos'), nova);
@@ -107,17 +107,17 @@ async function excluirProjeto(id) {
 
 // ======================== TAREFAS ========================
 
-async function getTarefas() {
+async function getTarefas(): Promise<Tarefa[]> {
     const data = await dbGet(dataKey('tarefas'));
     return data || [];
 }
 
-async function getTarefa(id) {
+async function getTarefa(id: string): Promise<Tarefa | null> {
     const tarefas = await getTarefas();
     return tarefas.find(t => t.id === id) || null;
 }
 
-async function salvarTarefa(tarefa) {
+async function salvarTarefa(tarefa: Tarefa): Promise<Tarefa> {
     const tarefas = await getTarefas();
     if (tarefa.id) {
         const idx = tarefas.findIndex(t => t.id === tarefa.id);
@@ -133,18 +133,18 @@ async function salvarTarefa(tarefa) {
     return tarefa;
 }
 
-async function excluirTarefa(id) {
+async function excluirTarefa(id: string): Promise<void> {
     const tarefas = await getTarefas();
     const nova = tarefas.filter(t => t.id !== id);
     await dbSet(dataKey('tarefas'), nova);
     await removerAnexosTarefa(id);
 }
 
-async function atualizarStatusTarefa(id, status) {
+async function atualizarStatusTarefa(id: string, status: string): Promise<void> {
     const tarefas = await getTarefas();
     const idx = tarefas.findIndex(t => t.id === id);
     if (idx !== -1) {
-        tarefas[idx].status = status;
+        tarefas[idx].status = status as StatusTarefa;
         tarefas[idx].atualizadoEm = new Date().toISOString();
         await dbSet(dataKey('tarefas'), tarefas);
     }
@@ -152,13 +152,13 @@ async function atualizarStatusTarefa(id, status) {
 
 // ======================== COMENTÁRIOS ========================
 
-async function adicionarComentario(tarefaId, texto) {
+async function adicionarComentario(tarefaId: string, texto: string): Promise<Comentario> {
     const tarefas = await getTarefas();
     const idx = tarefas.findIndex(t => t.id === tarefaId);
     if (idx === -1) throw new Error('Tarefa não encontrada');
 
-    const user = getCurrentUser();
-    const comentario = {
+    const user = getCurrentUser()!;
+    const comentario: Comentario = {
         id: genId(),
         texto: texto.trim(),
         autor: user.nome,
@@ -172,7 +172,7 @@ async function adicionarComentario(tarefaId, texto) {
     return comentario;
 }
 
-async function excluirComentario(tarefaId, comentarioId) {
+async function excluirComentario(tarefaId: string, comentarioId: string): Promise<void> {
     const tarefas = await getTarefas();
     const idx = tarefas.findIndex(t => t.id === tarefaId);
     if (idx === -1) return;
@@ -183,23 +183,23 @@ async function excluirComentario(tarefaId, comentarioId) {
 
 // ======================== ANEXOS ========================
 
-function anexoKey(tarefaId, anexoId) {
-    return `user:${getCurrentUser().uid}:anexo:${tarefaId}:${anexoId}`;
+function anexoKey(tarefaId: string, anexoId: string): string {
+    return `user:${getCurrentUser()!.uid}:anexo:${tarefaId}:${anexoId}`;
 }
 
-async function adicionarAnexo(tarefaId, arquivo) {
+async function adicionarAnexo(tarefaId: string, arquivo: File): Promise<Anexo> {
     const tarefas = await getTarefas();
     const idx = tarefas.findIndex(t => t.id === tarefaId);
     if (idx === -1) throw new Error('Tarefa não encontrada');
 
     const id = genId();
-    const anexo = {
+    const anexo: Anexo = {
         id,
         nome: arquivo.name,
         tipo: arquivo.type || 'application/octet-stream',
         tamanho: arquivo.size,
         criadoEm: new Date().toISOString(),
-        autor: getCurrentUser().nome
+        autor: getCurrentUser()!.nome
     };
 
     // Salva o Blob separadamente
@@ -213,11 +213,11 @@ async function adicionarAnexo(tarefaId, arquivo) {
     return anexo;
 }
 
-async function obterBlobAnexo(tarefaId, anexoId) {
+async function obterBlobAnexo(tarefaId: string, anexoId: string): Promise<Blob | undefined> {
     return dbGetBlob(anexoKey(tarefaId, anexoId));
 }
 
-async function excluirAnexo(tarefaId, anexoId) {
+async function excluirAnexo(tarefaId: string, anexoId: string): Promise<void> {
     const tarefas = await getTarefas();
     const idx = tarefas.findIndex(t => t.id === tarefaId);
     if (idx !== -1) {
@@ -227,7 +227,7 @@ async function excluirAnexo(tarefaId, anexoId) {
     await dbDeleteBlob(anexoKey(tarefaId, anexoId));
 }
 
-async function removerAnexosTarefa(tarefaId) {
+async function removerAnexosTarefa(tarefaId: string): Promise<void> {
     const tarefa = await getTarefa(tarefaId);
     if (!tarefa || !tarefa.anexos) return;
     for (const a of tarefa.anexos) {
@@ -238,7 +238,7 @@ async function removerAnexosTarefa(tarefaId) {
 // ======================== NOTIFICAÇÕES DE PRAZO ========================
 
 // Retorna lista de tarefas/projetos com prazo próximo (3 dias) ou atrasado
-async function getNotificacoes() {
+async function getNotificacoes(): Promise<Notificacao[]> {
     const tarefas = await getTarefas();
     const projetos = await getProjetos();
 
@@ -247,13 +247,13 @@ async function getNotificacoes() {
     const limiteProximo = new Date(hoje);
     limiteProximo.setDate(limiteProximo.getDate() + 3);
 
-    const notificacoes = [];
+    const notificacoes: Notificacao[] = [];
 
     // Tarefas
     tarefas.forEach(t => {
         if (!t.prazo || t.status === 'concluido') return;
         const prazo = new Date(t.prazo + 'T00:00:00');
-        if (isNaN(prazo)) return;
+        if (isNaN(prazo.getTime())) return;
         if (prazo < hoje) {
             notificacoes.push({
                 tipo: 'tarefa',
@@ -261,10 +261,10 @@ async function getNotificacoes() {
                 id: t.id,
                 titulo: t.titulo,
                 prazo: t.prazo,
-                dias: Math.round((hoje - prazo) / 86400000)
+                dias: Math.round((hoje.getTime() - prazo.getTime()) / 86400000)
             });
         } else if (prazo <= limiteProximo) {
-            const dias = Math.round((prazo - hoje) / 86400000);
+            const dias = Math.round((prazo.getTime() - hoje.getTime()) / 86400000);
             notificacoes.push({
                 tipo: 'tarefa',
                 severidade: 'proximo',
@@ -280,7 +280,7 @@ async function getNotificacoes() {
     projetos.forEach(p => {
         if (!p.prazo || p.status === 'concluido') return;
         const prazo = new Date(p.prazo + 'T00:00:00');
-        if (isNaN(prazo)) return;
+        if (isNaN(prazo.getTime())) return;
         if (prazo < hoje) {
             notificacoes.push({
                 tipo: 'projeto',
@@ -288,10 +288,10 @@ async function getNotificacoes() {
                 id: p.id,
                 titulo: p.nome,
                 prazo: p.prazo,
-                dias: Math.round((hoje - prazo) / 86400000)
+                dias: Math.round((hoje.getTime() - prazo.getTime()) / 86400000)
             });
         } else if (prazo <= limiteProximo) {
-            const dias = Math.round((prazo - hoje) / 86400000);
+            const dias = Math.round((prazo.getTime() - hoje.getTime()) / 86400000);
             notificacoes.push({
                 tipo: 'projeto',
                 severidade: 'proximo',
@@ -314,18 +314,19 @@ async function getNotificacoes() {
 
 // ======================== IMPORTAÇÃO / EXPORTAÇÃO ========================
 
-async function exportarTudo() {
+async function exportarTudo(): Promise<BackdadoExport> {
     const equipes = await getEquipes();
     const projetos = await getProjetos();
     const tarefas = await getTarefas();
     const pessoal = await getPessoal();
+    const user = getCurrentUser()!;
 
     return {
         versao: 1,
         exportadoEm: new Date().toISOString(),
         usuario: {
-            nome: getCurrentUser().nome,
-            email: getCurrentUser().email
+            nome: user.nome,
+            email: user.email
         },
         equipes,
         projetos,
@@ -334,7 +335,7 @@ async function exportarTudo() {
     };
 }
 
-async function importarTudo(dados) {
+async function importarTudo(dados: any): Promise<void> {
     if (!dados || typeof dados !== 'object') {
         throw new Error('Arquivo inválido.');
     }

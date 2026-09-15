@@ -61,24 +61,25 @@ registrarView('pessoal', {
         renderLista();
 
         // Busca
-        const busca = container.querySelector('#busca-pessoal');
+        const busca = container.querySelector('#busca-pessoal') as HTMLInputElement;
         busca.addEventListener('input', () => renderLista(busca.value));
 
         // Novo funcionário
-        container.querySelector('#btn-novo-pessoa').addEventListener('click', () => abrirModalPessoa(null, pessoal, renderLista));
+        container.querySelector('#btn-novo-pessoa')!.addEventListener('click', () => abrirModalPessoa(null, pessoal, renderLista));
 
         // Delegar ações
         listaDiv.addEventListener('click', async (e) => {
-            const btnEdit = e.target.closest('[data-edit]');
-            const btnDel = e.target.closest('[data-del]');
+            const target = e.target as HTMLElement;
+            const btnEdit = target.closest('[data-edit]') as HTMLElement | null;
+            const btnDel = target.closest('[data-del]') as HTMLElement | null;
 
             if (btnEdit) {
-                const pessoa = pessoal.find(x => x.id === btnEdit.dataset.edit);
-                abrirModalPessoa(pessoa, pessoal, renderLista);
+                const pessoa = pessoal.find(x => x.id === btnEdit!.dataset.edit);
+                abrirModalPessoa(pessoa || null, pessoal, renderLista);
             }
 
             if (btnDel) {
-                const id = btnDel.dataset.del;
+                const id = btnDel!.dataset.del!;
                 const pessoa = pessoal.find(x => x.id === id);
                 if (confirm(`Excluir o funcionário "${pessoa && pessoa.nome}"?`)) {
                     await excluirPessoa(id);
@@ -92,7 +93,7 @@ registrarView('pessoal', {
 });
 
 // Abre o modal de criação/edição de funcionário
-function abrirModalPessoa(pessoa, pessoal, depois) {
+function abrirModalPessoa(pessoa: Pessoa | null, pessoal: Pessoa[], depois?: () => void): void {
     const modal = criarModal(pessoa ? 'Editar Funcionário' : 'Novo Funcionário');
 
     modal.body.innerHTML = `
@@ -134,17 +135,17 @@ function abrirModalPessoa(pessoa, pessoal, depois) {
         </form>
     `;
 
-    modal.body.querySelector('#ps-cancel').addEventListener('click', modal.fechar);
+    (modal.body.querySelector('#ps-cancel') as HTMLButtonElement).addEventListener('click', modal.fechar);
 
-    modal.body.querySelector('#form-pessoa').addEventListener('submit', async (e) => {
+    (modal.body.querySelector('#form-pessoa') as HTMLFormElement).addEventListener('submit', async (e) => {
         e.preventDefault();
-        const dados = {
-            nome: modal.body.querySelector('#ps-nome').value.trim(),
-            cargo: modal.body.querySelector('#ps-cargo').value.trim(),
-            funcao: modal.body.querySelector('#ps-funcao').value.trim(),
-            departamento: modal.body.querySelector('#ps-dep').value,
-            email: modal.body.querySelector('#ps-email').value.trim(),
-            telefone: modal.body.querySelector('#ps-telefone').value.trim()
+        const dados: Omit<Pessoa, 'id' | 'criadoEm'> = {
+            nome: (modal.body.querySelector('#ps-nome') as HTMLInputElement).value.trim(),
+            cargo: (modal.body.querySelector('#ps-cargo') as HTMLInputElement).value.trim(),
+            funcao: (modal.body.querySelector('#ps-funcao') as HTMLInputElement).value.trim(),
+            departamento: (modal.body.querySelector('#ps-dep') as HTMLSelectElement).value,
+            email: (modal.body.querySelector('#ps-email') as HTMLInputElement).value.trim(),
+            telefone: (modal.body.querySelector('#ps-telefone') as HTMLInputElement).value.trim()
         };
         if (!dados.nome) { toast('Nome é obrigatório', 'erro'); return; }
         if (!dados.cargo) { toast('Cargo é obrigatório', 'erro'); return; }
@@ -155,7 +156,7 @@ function abrirModalPessoa(pessoa, pessoal, depois) {
             await salvarPessoa(pessoal[idx]);
             toast('Funcionário atualizado!');
         } else {
-            const nova = await salvarPessoa(dados);
+            const nova = await salvarPessoa(dados as any);
             pessoal.push(nova);
             toast('Funcionário adicionado!');
         }

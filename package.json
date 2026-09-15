@@ -1,0 +1,14 @@
+{
+  "name": "gestao-de-equipes",
+  "version": "1.0.0",
+  "description": "Plataforma de gestão de equipes, projetos, tarefas e pessoal (SPA client-side).",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "watch": "tsc -w -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  }
+}

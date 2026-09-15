@@ -36,16 +36,16 @@ function preencherUsuario() {
 // ---- CTAs da landing page -> tela de login (na aba correta) ----
 function irParaLogin(aba) {
     loginTab = aba;
-    document.querySelectorAll('.auth-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === aba));
-    document.getElementById('auth-cadastro-fields').classList.toggle('hidden', aba !== 'cadastro');
-    document.getElementById('auth-submit').textContent = aba === 'cadastro' ? 'Criar conta' : 'Entrar';
-    document.getElementById('auth-error').textContent = '';
+    document.querySelectorAll('.auth-tab').forEach(t => t.classList.toggle('active', (t as HTMLElement).dataset.tab === aba));
+    document.getElementById('auth-cadastro-fields')!.classList.toggle('hidden', aba !== 'cadastro');
+    document.getElementById('auth-submit')!.textContent = aba === 'cadastro' ? 'Criar conta' : 'Entrar';
+    document.getElementById('auth-error')!.textContent = '';
     mostrarLogin();
     setTimeout(() => {
         if (aba === 'cadastro') {
-            document.getElementById('auth-nome').focus();
+            document.getElementById('auth-nome')!.focus();
         } else {
-            document.getElementById('auth-email').focus();
+            document.getElementById('auth-email')!.focus();
         }
     }, 50);
 }
@@ -71,8 +71,8 @@ document.querySelectorAll('[data-plan]').forEach(btn => {
 
 // Botão "Voltar" do login
 document.getElementById('auth-back').addEventListener('click', () => {
-    document.getElementById('auth-form').reset();
-    document.getElementById('auth-error').textContent = '';
+    (document.getElementById('auth-form') as HTMLFormElement).reset();
+    document.getElementById('auth-error')!.textContent = '';
     mostrarLanding();
 });
 
@@ -90,12 +90,12 @@ document.querySelectorAll('.lp-nav-links a').forEach(a => {
 
 // Ano no rodapé
 const anoEl = document.getElementById('lp-ano');
-if (anoEl) anoEl.textContent = new Date().getFullYear();
+if (anoEl) anoEl.textContent = String(new Date().getFullYear());
 
 // ---- Login form ----
 document.querySelectorAll('.auth-tab').forEach(tab => {
     tab.addEventListener('click', () => {
-        loginTab = tab.dataset.tab;
+        loginTab = (tab as HTMLElement).dataset.tab || 'login';
         document.querySelectorAll('.auth-tab').forEach(t => t.classList.toggle('active', t === tab));
         document.getElementById('auth-cadastro-fields').classList.toggle('hidden', loginTab !== 'cadastro');
         document.getElementById('auth-submit').textContent = loginTab === 'cadastro' ? 'Criar conta' : 'Entrar';
@@ -105,10 +105,11 @@ document.querySelectorAll('.auth-tab').forEach(tab => {
 
 document.getElementById('auth-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const email = document.getElementById('auth-email').value.trim();
-    const senha = document.getElementById('auth-senha').value;
-    const nome = document.getElementById('auth-nome').value.trim();
+    const email = (document.getElementById('auth-email') as HTMLInputElement).value.trim();
+    const senha = (document.getElementById('auth-senha') as HTMLInputElement).value;
+    const nome = (document.getElementById('auth-nome') as HTMLInputElement).value.trim();
     const errBox = document.getElementById('auth-error');
+    if (!errBox) return;
     errBox.textContent = '';
 
     try {
@@ -122,16 +123,16 @@ document.getElementById('auth-form').addEventListener('submit', async (e) => {
         mostrarApp();
         navegarPara('dashboard');
         atualizarIndicadorNotificacoes();
-    } catch (err) {
-        errBox.textContent = err.message;
+    } catch (err: any) {
+        errBox.textContent = (err as Error).message;
     }
 });
 
 // Logout
 document.getElementById('btn-logout').addEventListener('click', async () => {
     await authLogout();
-    document.getElementById('auth-form').reset();
-    document.getElementById('auth-error').textContent = '';
+    (document.getElementById('auth-form') as HTMLFormElement).reset();
+    document.getElementById('auth-error')!.textContent = '';
     const badge = document.getElementById('notif-badge');
     if (badge) badge.style.display = 'none';
     mostrarLanding();
@@ -143,8 +144,9 @@ document.getElementById('menu-toggle').addEventListener('click', () => {
 });
 
 document.addEventListener('click', (e) => {
-    if (e.target.closest('[data-view]')) {
-        document.querySelector('.sidebar').classList.remove('open');
+    const target = e.target as HTMLElement | null;
+    if (target && target.closest('[data-view]')) {
+        document.querySelector('.sidebar')!.classList.remove('open');
     }
 });
 

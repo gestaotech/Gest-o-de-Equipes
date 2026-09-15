@@ -75,11 +75,12 @@ registrarView('notificacoes', {
         // Clique em uma notificação navega para a view apropriada
         container.querySelectorAll('.notif-item').forEach(el => {
             el.addEventListener('click', () => {
-                if (el.dataset.view === 'tarefas') {
+                const item = el as HTMLElement;
+                if (item.dataset.view === 'tarefas') {
                     sessao.projetoCtx = null;
                     navegarPara('tarefas');
                 } else {
-                    sessao.projetoCtx = el.dataset.id;
+                    sessao.projetoCtx = item.dataset.id || null;
                     navegarPara('projetos');
                 }
             });

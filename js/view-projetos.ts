@@ -38,8 +38,8 @@ registrarView('projetos', {
         container.appendChild(listaDiv);
 
         function renderLista() {
-            const busca = container.querySelector('#busca-projetos').value;
-            const status = container.querySelector('#filtro-status').value;
+            const busca = (container.querySelector('#busca-projetos') as HTMLInputElement).value;
+            const status = (container.querySelector('#filtro-status') as HTMLSelectElement).value;
 
             let filtradas = buscar(projetos, busca, ['nome', 'cliente', 'descricao']);
             if (status) filtradas = filtradas.filter(p => p.status === status);
@@ -95,17 +95,18 @@ registrarView('projetos', {
         container.querySelector('#btn-novo-projeto').addEventListener('click', () => abrirModalProjeto(null, projetos, equipes, renderLista));
 
         listaDiv.addEventListener('click', (e) => {
-            const btnEdit = e.target.closest('[data-edit]');
-            const btnDel = e.target.closest('[data-del]');
-            const linkTarefas = e.target.closest('[data-view="tarefas"]');
+            const target = e.target as HTMLElement;
+            const btnEdit = target.closest('[data-edit]') as HTMLElement | null;
+            const btnDel = target.closest('[data-del]') as HTMLElement | null;
+            const linkTarefas = target.closest('[data-view="tarefas"]') as HTMLElement | null;
 
             if (btnEdit) {
-                const p = projetos.find(x => x.id === btnEdit.dataset.edit);
-                abrirModalProjeto(p, projetos, equipes, renderLista);
+                const p = projetos.find(x => x.id === btnEdit!.dataset.edit);
+                abrirModalProjeto(p || null, projetos, equipes, renderLista);
             }
 
             if (btnDel) {
-                const id = btnDel.dataset.del;
+                const id = btnDel!.dataset.del!;
                 const p = projetos.find(x => x.id === id);
                 if (confirm(`Excluir o projeto "${p && p.nome}"? As tarefas vinculadas também serão excluídas.`)) {
                     excluirProjeto(id).then(() => {
@@ -120,7 +121,7 @@ registrarView('projetos', {
                 e.preventDefault();
                 e.stopPropagation();
                 // Abre a view de tarefas filtrada pelo projeto
-                sessao.projetoCtx = linkTarefas.dataset.projeto;
+                sessao.projetoCtx = linkTarefas.dataset.projeto || null;
                 navegarPara('tarefas');
             }
         });
@@ -128,7 +129,7 @@ registrarView('projetos', {
 });
 
 // Abre o modal de criação/edição de projeto
-function abrirModalProjeto(projeto, projetos, equipes, depois) {
+function abrirModalProjeto(projeto: Projeto | null, projetos: Projeto[], equipes: Equipe[], depois?: () => void): void {
     const modal = criarModal(projeto ? 'Editar Projeto' : 'Novo Projeto');
 
     const departamentos = [...new Set(equipes.map(e => e.departamento).filter(Boolean))];
@@ -176,17 +177,17 @@ function abrirModalProjeto(projeto, projetos, equipes, depois) {
         </form>
     `;
 
-    modal.body.querySelector('#pr-cancel').addEventListener('click', modal.fechar);
+    (modal.body.querySelector('#pr-cancel') as HTMLButtonElement).addEventListener('click', modal.fechar);
 
-    modal.body.querySelector('#form-projeto').addEventListener('submit', async (e) => {
+    (modal.body.querySelector('#form-projeto') as HTMLFormElement).addEventListener('submit', async (e) => {
         e.preventDefault();
-        const dados = {
-            nome: modal.body.querySelector('#pr-nome').value.trim(),
-            cliente: modal.body.querySelector('#pr-cliente').value.trim(),
-            equipeId: modal.body.querySelector('#pr-equipe').value,
-            prazo: modal.body.querySelector('#pr-prazo').value,
-            status: modal.body.querySelector('#pr-status').value,
-            descricao: modal.body.querySelector('#pr-desc').value.trim()
+        const dados: Omit<Projeto, 'id' | 'criadoEm'> = {
+            nome: (modal.body.querySelector('#pr-nome') as HTMLInputElement).value.trim(),
+            cliente: (modal.body.querySelector('#pr-cliente') as HTMLInputElement).value.trim(),
+            equipeId: (modal.body.querySelector('#pr-equipe') as HTMLSelectElement).value,
+            prazo: (modal.body.querySelector('#pr-prazo') as HTMLInputElement).value,
+            status: (modal.body.querySelector('#pr-status') as HTMLSelectElement).value as StatusProjeto,
+            descricao: (modal.body.querySelector('#pr-desc') as HTMLTextAreaElement).value.trim()
         };
         if (!dados.nome) { toast('Nome é obrigatório', 'erro'); return; }
 
@@ -196,7 +197,7 @@ function abrirModalProjeto(projeto, projetos, equipes, depois) {
             await salvarProjeto(projetos[idx]);
             toast('Projeto atualizado!');
         } else {
-            const novo = await salvarProjeto(dados);
+            const novo = await salvarProjeto(dados as any);
             projetos.push(novo);
             toast('Projeto criado!');
         }

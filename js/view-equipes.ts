@@ -73,24 +73,25 @@ registrarView('equipes', {
         renderLista();
 
         // Busca
-        const busca = container.querySelector('#busca-equipes');
+        const busca = container.querySelector('#busca-equipes') as HTMLInputElement;
         busca.addEventListener('input', () => renderLista(busca.value));
 
         // Nova equipe
-        container.querySelector('#btn-nova-equipe').addEventListener('click', () => abrirModalEquipe(null, equipes, renderLista, pessoal));
+        container.querySelector('#btn-nova-equipe')!.addEventListener('click', () => abrirModalEquipe(null, equipes, renderLista, pessoal));
 
         // Delegar ações
         listaDiv.addEventListener('click', async (e) => {
-            const btnEdit = e.target.closest('[data-edit]');
-            const btnDel = e.target.closest('[data-del]');
+            const target = e.target as HTMLElement;
+            const btnEdit = target.closest('[data-edit]') as HTMLElement | null;
+            const btnDel = target.closest('[data-del]') as HTMLElement | null;
 
             if (btnEdit) {
                 const equipe = equipes.find(x => x.id === btnEdit.dataset.edit);
-                abrirModalEquipe(equipe, equipes, renderLista, pessoal);
+                abrirModalEquipe(equipe!, equipes, renderLista, pessoal);
             }
 
             if (btnDel) {
-                const id = btnDel.dataset.del;
+                const id = btnDel.dataset.del!;
                 const equipe = equipes.find(x => x.id === id);
                 if (confirm(`Excluir a equipe "${equipe && equipe.nome}"?`)) {
                     await excluirEquipe(id);
@@ -104,7 +105,7 @@ registrarView('equipes', {
 });
 
 // Abre o modal de criação/edição de equipe
-function abrirModalEquipe(equipe, equipes, depois, pessoal = []) {
+function abrirModalEquipe(equipe: Equipe | null, equipes: Equipe[], depois?: () => void, pessoal: Pessoa[] = []): void {
     const modal = criarModal(equipe ? 'Editar Equipe' : 'Nova Equipe');
     const membros = equipe ? [...(equipe.membros || [])] : [];
 
@@ -167,9 +168,9 @@ function abrirModalEquipe(equipe, equipes, depois, pessoal = []) {
     }
 
     function renderMembrosSelect() {
-        const $sel = modal.body.querySelector('#eq-membro-select');
+        const $sel = modal.body.querySelector('#eq-membro-select') as HTMLSelectElement;
         if (!$sel) return;
-        const dep = modal.body.querySelector('#eq-dep').value;
+        const dep = (modal.body.querySelector('#eq-dep') as HTMLSelectElement).value;
         let disponiveis = pessoal.filter(p => !membros.includes(p.nome));
         if (dep) {
             const doDept = disponiveis.filter(p => p.departamento === dep);
@@ -184,7 +185,7 @@ function abrirModalEquipe(equipe, equipes, depois, pessoal = []) {
     renderMembrosSelect();
 
     // Adiciona membro selecionado do Pessoal
-    const $sel = modal.body.querySelector('#eq-membro-select');
+    const $sel = modal.body.querySelector('#eq-membro-select') as HTMLSelectElement;
     $sel.addEventListener('change', () => {
         const v = $sel.value;
         if (!v) return;
@@ -193,7 +194,7 @@ function abrirModalEquipe(equipe, equipes, depois, pessoal = []) {
         // Sincroniza departamento: se a equipe não tem, herda o do funcionário
         const p = pessoal.find(x => x.nome === v);
         if (p && p.departamento) {
-            const $dep = modal.body.querySelector('#eq-dep');
+            const $dep = modal.body.querySelector('#eq-dep') as HTMLSelectElement;
             if (!$dep.value) $dep.value = p.departamento;
         }
         $sel.value = '';
@@ -202,10 +203,10 @@ function abrirModalEquipe(equipe, equipes, depois, pessoal = []) {
     });
 
     // Ao trocar o departamento, atualiza a lista de funcionários sugeridos
-    modal.body.querySelector('#eq-dep').addEventListener('change', renderMembrosSelect);
+    (modal.body.querySelector('#eq-dep') as HTMLSelectElement).addEventListener('change', renderMembrosSelect);
 
     // Adicionar membro digitado
-    const $input = modal.body.querySelector('#eq-membro');
+    const $input = modal.body.querySelector('#eq-membro') as HTMLInputElement;
     function addMembro() {
         const v = $input.value.trim();
         if (!v) return;
@@ -216,28 +217,29 @@ function abrirModalEquipe(equipe, equipes, depois, pessoal = []) {
         renderMembrosSelect();
         $input.focus();
     }
-    modal.body.querySelector('#eq-add').addEventListener('click', addMembro);
-    $input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addMembro(); } });
+    modal.body.querySelector('#eq-add')!.addEventListener('click', addMembro);
+    $input.addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter') { e.preventDefault(); addMembro(); } });
 
     // Remover membro (delegação)
-    modal.body.querySelector('#eq-tags').addEventListener('click', (e) => {
-        const btn = e.target.closest('.tag-remove');
+    (modal.body.querySelector('#eq-tags') as HTMLElement).addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        const btn = target.closest('.tag-remove') as HTMLElement | null;
         if (btn) {
-            membros.splice(parseInt(btn.dataset.i), 1);
+            membros.splice(parseInt(btn.dataset.i!), 1);
             renderMembros();
             renderMembrosSelect();
         }
     });
 
-    modal.body.querySelector('#eq-cancel').addEventListener('click', modal.fechar);
+    (modal.body.querySelector('#eq-cancel') as HTMLButtonElement).addEventListener('click', modal.fechar);
 
-    modal.body.querySelector('#form-equipe').addEventListener('submit', async (e) => {
+    (modal.body.querySelector('#form-equipe') as HTMLFormElement).addEventListener('submit', async (e) => {
         e.preventDefault();
-        const dados = {
-            nome: modal.body.querySelector('#eq-nome').value.trim(),
-            departamento: modal.body.querySelector('#eq-dep').value,
-            lider: modal.body.querySelector('#eq-lider').value.trim(),
-            descricao: modal.body.querySelector('#eq-desc').value.trim(),
+        const dados: Omit<Equipe, 'id' | 'criadoEm'> = {
+            nome: (modal.body.querySelector('#eq-nome') as HTMLInputElement).value.trim(),
+            departamento: (modal.body.querySelector('#eq-dep') as HTMLSelectElement).value,
+            lider: (modal.body.querySelector('#eq-lider') as HTMLInputElement).value.trim(),
+            descricao: (modal.body.querySelector('#eq-desc') as HTMLTextAreaElement).value.trim(),
             membros: [...membros]
         };
         if (!dados.nome) { toast('Nome é obrigatório', 'erro'); return; }
@@ -248,7 +250,7 @@ function abrirModalEquipe(equipe, equipes, depois, pessoal = []) {
             await salvarEquipe(equipes[idx]);
             toast('Equipe atualizada!');
         } else {
-            const nova = await salvarEquipe(dados);
+            const nova = await salvarEquipe(dados as any);
             equipes.push(nova);
             toast('Equipe criada!');
         }

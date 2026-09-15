@@ -3,14 +3,14 @@
 // ============================================================
 
 // Escapa HTML para prevenir XSS
-function esc(texto) {
+function esc(texto: any): string {
     const div = document.createElement('div');
     div.textContent = texto == null ? '' : String(texto);
     return div.innerHTML;
 }
 
 // Modal genérico: retorna objeto com métodos open/close/setContent
-function criarModal(titulo, opts = {}) {
+function criarModal(titulo: string, opts: { largo?: boolean } = {}): { body: HTMLElement; fechar: () => void } {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     const modal = document.createElement('div');
@@ -24,11 +24,11 @@ function criarModal(titulo, opts = {}) {
         <div class="modal-body"></div>
     `;
 
-    const body = modal.querySelector('.modal-body');
+    const bodyEl = modal.querySelector('.modal-body') as HTMLElement;
     overlay.appendChild(modal);
 
     overlay.addEventListener('click', (e) => {
-        if (e.target === overlay || e.target.classList.contains('modal-close')) {
+        if (e.target === overlay || (e.target as HTMLElement).classList.contains('modal-close')) {
             fechar();
         }
     });
@@ -39,11 +39,11 @@ function criarModal(titulo, opts = {}) {
 
     document.body.appendChild(overlay);
 
-    return { body, fechar };
+    return { body: bodyEl, fechar };
 }
 
 // Exibe um toast/notificação
-function toast(mensagem, tipo = 'sucesso') {
+function toast(mensagem: string, tipo: 'sucesso' | 'erro' = 'sucesso'): void {
     const t = document.createElement('div');
     t.className = `toast toast-${tipo}`;
     t.textContent = mensagem;
@@ -56,7 +56,7 @@ function toast(mensagem, tipo = 'sucesso') {
 }
 
 // Lightbox para visualização de imagem
-function abrirLightbox(src, alt) {
+function abrirLightbox(src: string, alt?: string): void {
     const overlay = document.createElement('div');
     overlay.className = 'lightbox';
     overlay.innerHTML = `
@@ -66,12 +66,12 @@ function abrirLightbox(src, alt) {
     overlay.addEventListener('click', (e) => {
         if (e.target !== overlay.querySelector('img')) overlay.remove();
     });
-    overlay.querySelector('.lightbox-close').addEventListener('click', () => overlay.remove());
+    overlay.querySelector('.lightbox-close')!.addEventListener('click', () => overlay.remove());
     document.body.appendChild(overlay);
 }
 
 // Download de blob a partir de uma URL temporária
-function downloadBlob(blob, nome) {
+function downloadBlob(blob: Blob, nome: string): void {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -83,15 +83,21 @@ function downloadBlob(blob, nome) {
 }
 
 // Dispara download de um texto como arquivo
-function downloadTexto(conteudo, nome, mime = 'text/plain;charset=utf-8') {
+function downloadTexto(conteudo: string, nome: string, mime: string = 'text/plain;charset=utf-8'): void {
     const blob = new Blob([conteudo], { type: mime });
     downloadBlob(blob, nome);
 }
 
+// Coluna de CSV
+interface ColunaCSV<T> {
+    label: string;
+    get: (item: T) => any;
+}
+
 // Converte array de objetos para CSV (com cabeçalhos na primeira linha)
-function paraCSV(lista, colunas) {
+function paraCSV<T>(lista: T[], colunas: ColunaCSV<T>[]): string {
     if (!lista.length) return colunas.map(c => c.label).join(';') + '\n';
-    const escapa = v => {
+    const escapa = (v: any): string => {
         const s = v == null ? '' : String(v);
         if (s.includes(';') || s.includes('"') || s.includes('\n')) {
             return '"' + s.replace(/"/g, '""') + '"';
@@ -104,17 +110,17 @@ function paraCSV(lista, colunas) {
 }
 
 // Converte Blob em Data URL (para exibir imagens armazenadas)
-function blobParaDataURL(blob) {
+function blobParaDataURL(blob: Blob): Promise<string> {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
+        reader.onload = () => resolve(reader.result as string);
         reader.onerror = reject;
         reader.readAsDataURL(blob);
     });
 }
 
 // Busca por nome universal
-function buscar(lista, termo, campos) {
+function buscar<T extends Record<string, any>>(lista: T[], termo: string, campos: string[]): T[] {
     const t = termo.toLowerCase().trim();
     if (!t) return lista;
     return lista.filter(item => {
@@ -126,24 +132,24 @@ function buscar(lista, termo, campos) {
 }
 
 // Formata data ISO para dd/mm/aaaa
-function fmtData(iso) {
+function fmtData(iso: string): string {
     if (!iso) return '';
     const d = new Date(iso);
-    if (isNaN(d)) return '';
+    if (isNaN(d.getTime())) return '';
     return d.toLocaleDateString('pt-BR');
 }
 
 // Data + hora
-function fmtDataHora(iso) {
+function fmtDataHora(iso: string): string {
     if (!iso) return '';
     const d = new Date(iso);
-    if (isNaN(d)) return '';
+    if (isNaN(d.getTime())) return '';
     return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
 // Rótulo legível para status
-function rotuloStatus(status) {
-    const map = {
+function rotuloStatus(status: string): string {
+    const map: Record<string, string> = {
         a_fazer: 'A fazer',
         em_andamento: 'Em andamento',
         concluido: 'Concluído',
@@ -156,7 +162,7 @@ function rotuloStatus(status) {
 }
 
 // Tamanho legível de arquivo
-function fmtTamanho(bytes) {
+function fmtTamanho(bytes: number): string {
     if (!bytes) return '0 B';
     const u = ['B', 'KB', 'MB', 'GB'];
     let i = 0;
@@ -169,40 +175,41 @@ function fmtTamanho(bytes) {
 // Navegação (SPA)
 // ------------------------------------------------------------------
 
-const sessao = { projetoCtx: null };
-let activeView = null;
+const sessao: Sessao = { projetoCtx: null };
+let activeView: string | null = null;
 
-const views = {};
-function registrarView(nome, view) { views[nome] = view; }
+const views: Record<string, ViewDefinition> = {};
+function registrarView(nome: string, view: ViewDefinition): void { views[nome] = view; }
 
-async function navegarPara(nome) {
+async function navegarPara(nome: string): Promise<void> {
     if (!views[nome]) return;
 
     document.querySelectorAll('.nav-item').forEach(el => {
-        el.classList.toggle('active', el.dataset.view === nome);
+        el.classList.toggle('active', (el as HTMLElement).dataset.view === nome);
     });
 
     const titulo = document.getElementById('page-title');
     if (titulo) titulo.textContent = views[nome].titulo;
 
-    const container = document.getElementById('app-content');
+    const container = document.getElementById('app-content') as HTMLElement;
     container.innerHTML = '';
 
     activeView = nome;
 
     try {
         await views[nome].render(container);
-    } catch (err) {
+    } catch (err: any) {
         console.error(err);
         container.innerHTML = `<p class="empty-state">Erro ao carregar: ${esc(err.message)}</p>`;
     }
 }
 
 document.addEventListener('click', (e) => {
-    const nav = e.target.closest('[data-view]');
+    const target = e.target as HTMLElement | null;
+    const nav = target ? (target.closest('[data-view]') as HTMLElement | null) : null;
     if (nav) {
         e.preventDefault();
-        navegarPara(nav.dataset.view);
+        navegarPara(nav.dataset.view || '');
     }
 });
 
@@ -210,14 +217,14 @@ document.addEventListener('click', (e) => {
 // Sidebar: indicador de notificações
 // ------------------------------------------------------------------
 
-async function atualizarIndicadorNotificacoes() {
-    const badge = document.getElementById('notif-badge');
+async function atualizarIndicadorNotificacoes(): Promise<void> {
+    const badge = document.getElementById('notif-badge') as HTMLElement | null;
     if (!badge) return;
     const notifs = await getNotificacoes();
     if (notifs.length === 0) {
         badge.style.display = 'none';
     } else {
         badge.style.display = 'inline-block';
-        badge.textContent = notifs.length;
+        badge.textContent = String(notifs.length);
     }
 }

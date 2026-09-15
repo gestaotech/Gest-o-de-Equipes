@@ -6,28 +6,28 @@
 
 const AUTH_KEY = 'auth:current';
 
-let currentUser = null;
+let currentUser: Usuario | null = null;
 
 // Inicializa a sessão
-async function authInit() {
+async function authInit(): Promise<Usuario | null> {
     await openDB();
     const stored = await dbGet(AUTH_KEY);
-    currentUser = stored || null;
+    currentUser = (stored as Usuario) || null;
     return currentUser;
 }
 
 // Verifica se há usuário logado
-function isLoggedIn() {
+function isLoggedIn(): boolean {
     return currentUser !== null;
 }
 
 // Retorna dados do usuário atual
-function getCurrentUser() {
+function getCurrentUser(): Usuario | null {
     return currentUser;
 }
 
 // Cadastra um novo usuário local
-async function authRegister(nome, email, senha) {
+async function authRegister(nome: string, email: string, senha: string): Promise<void> {
     const key = `user:${email.toLowerCase()}:profile`;
     const existing = await dbGet(key);
     if (existing) {
@@ -35,7 +35,7 @@ async function authRegister(nome, email, senha) {
     }
 
     const uid = generateUid();
-    const profile = {
+    const profile: Usuario = {
         uid,
         nome,
         email: email.toLowerCase(),
@@ -50,6 +50,7 @@ async function authRegister(nome, email, senha) {
     await dbSet(`user:${uid}:equipes`, []);
     await dbSet(`user:${uid}:projetos`, []);
     await dbSet(`user:${uid}:tarefas`, []);
+    await dbSet(`user:${uid}:pessoal`, []);
 
     // Referência simplificada: email -> uid
     await dbSet(`auth:uid:${email.toLowerCase()}`, uid);
@@ -60,9 +61,9 @@ async function authRegister(nome, email, senha) {
 }
 
 // Realiza o login
-async function authLogin(email, senha) {
+async function authLogin(email: string, senha: string): Promise<Usuario | null> {
     const key = `user:${email.toLowerCase()}:profile`;
-    const profile = await dbGet(key);
+    const profile = (await dbGet(key)) as Usuario;
 
     if (!profile || profile.senha !== senha) {
         throw new Error('E-mail ou senha inválidos.');
@@ -74,12 +75,12 @@ async function authLogin(email, senha) {
 }
 
 // Encerra a sessão
-async function authLogout() {
+async function authLogout(): Promise<void> {
     await dbDelete(AUTH_KEY);
     currentUser = null;
 }
 
 // Gera um UID único
-function generateUid() {
+function generateUid(): string {
     return Date.now().toString(36) + '-' + Math.random().toString(36).substr(2, 9);
 }
