@@ -144,11 +144,7 @@ registrarView('configuracoes', {
         container.querySelector('#btn-limpar').addEventListener('click', async () => {
             if (!confirm('Tem certeza? Esta ação não pode ser desfeita.')) return;
             if (!confirm('Última confirmação: apagar TODOS os dados?')) return;
-            const uid = getCurrentUser().uid;
-            await dbSet(`user:${uid}:equipes`, []);
-            await dbSet(`user:${uid}:projetos`, []);
-            await dbSet(`user:${uid}:tarefas`, []);
-            await dbSet(`user:${uid}:pessoal`, []);
+            await importarTudo({ equipes: [], projetos: [], tarefas: [], pessoal: [] });
             toast('Dados apagados!', 'erro');
             setTimeout(() => location.reload(), 800);
         });

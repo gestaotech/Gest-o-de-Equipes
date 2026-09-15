@@ -1,0 +1,107 @@
+// ============================================================
+// SCHEMA PRISMA - PostgreSQL (Neon)
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Usuario {
+  id        String    @id @default(cuid())
+  nome      String
+  email     String    @unique
+  senha     String
+  criadoEm  DateTime  @default(now())
+  equipes   Equipe[]
+  pessoal   Pessoa[]
+  projetos  Projeto[]
+  tarefas   Tarefa[]
+  sessoes   Sessao[]
+}
+
+model Sessao {
+  token     String    @id
+  usuarioId String
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  criadoEm  DateTime  @default(now())
+}
+
+model Pessoa {
+  id          String   @id
+  usuarioId   String
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  nome        String
+  cargo       String   @default("")
+  funcao      String   @default("")
+  departamento String  @default("")
+  email       String   @default("")
+  telefone    String   @default("")
+  criadoEm    DateTime @default(now())
+}
+
+model Equipe {
+  id          String  @id
+  usuarioId   String
+  usuario     Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  nome        String
+  departamento String @default("")
+  lider       String  @default("")
+  descricao   String  @default("")
+  membros     Json    @default("[]")
+  criadoEm    DateTime @default(now())
+}
+
+model Projeto {
+  id         String   @id
+  usuarioId  String
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  nome       String
+  cliente    String   @default("")
+  equipeId   String   @default("")
+  prazo      String   @default("")
+  status     String   @default("planejamento")
+  descricao  String   @default("")
+  criadoEm   DateTime @default(now())
+}
+
+model Tarefa {
+  id           String       @id
+  usuarioId    String
+  usuario      Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  titulo       String
+  projetoId    String       @default("")
+  responsavel  String       @default("")
+  status       String       @default("a_fazer")
+  prazo        String       @default("")
+  descricao    String       @default("")
+  criadoEm     DateTime     @default(now())
+  atualizadoEm DateTime?
+  comentarios  Comentario[]
+  anexos       Anexo[]
+}
+
+model Comentario {
+  id        String   @id
+  tarefaId  String
+  tarefa    Tarefa   @relation(fields: [tarefaId], references: [id], onDelete: Cascade)
+  texto     String
+  autor     String   @default("")
+  criadoEm  DateTime @default(now())
+}
+
+model Anexo {
+  id        String   @id
+  tarefaId  String
+  tarefa    Tarefa   @relation(fields: [tarefaId], references: [id], onDelete: Cascade)
+  nome      String
+  tipo      String   @default("")
+  tamanho   Int      @default(0)
+  criadoEm  DateTime @default(now())
+  autor     String   @default("")
+  conteudo  Bytes?
+}

@@ -60,6 +60,7 @@ interface Anexo {
     tamanho: number;
     criadoEm: string;
     autor: string;
+    conteudo?: string;
 }
 
 interface Tarefa {

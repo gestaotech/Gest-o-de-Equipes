@@ -1,127 +1,166 @@
 // ============================================================
 // DATA - Regras de negócio para Equipes, Projetos, Tarefas
-// Todos os dados são escopados por usuário
+// Persistência via API (Neon Postgres) com cache em memória
 // ============================================================
 
-function dataKey(type: string): string {
-    const uid = getCurrentUser()!.uid;
-    return `user:${uid}:${type}`;
+interface DadosMemo {
+    equipes: Equipe[];
+    pessoal: Pessoa[];
+    projetos: Projeto[];
+    tarefas: Tarefa[];
 }
+
+let dadosMemo: DadosMemo | null = null;
+let persisting: Promise<any> = Promise.resolve();
 
 // Gera id único
 function genId(): string {
     return Date.now().toString(36) + '-' + Math.random().toString(36).substr(2, 9);
 }
 
+function limparCacheDados(): void {
+    dadosMemo = null;
+}
+
+// Carrega os dados do usuário (uma única vez) via API
+async function carregarDados(force = false): Promise<void> {
+    if (dadosMemo && !force) return;
+    const d = await apiFetch('/api/dados');
+    dadosMemo = {
+        equipes: d.equipes || [],
+        pessoal: d.pessoal || [],
+        projetos: d.projetos || [],
+        tarefas: d.tarefas || []
+    };
+}
+
+// Envia o estado atual ao servidor (Postgres)
+function persistirDados(): Promise<void> {
+    if (!dadosMemo) return Promise.resolve();
+    const payload = {
+        equipes: dadosMemo.equipes,
+        pessoal: dadosMemo.pessoal,
+        projetos: dadosMemo.projetos,
+        tarefas: dadosMemo.tarefas
+    };
+    persisting = persisting
+        .catch(() => {})
+        .then(() => apiFetch('/api/dados', { method: 'PUT', body: JSON.stringify(payload) }))
+        .catch(err => {
+            console.warn('Falha ao salvar dados no servidor:', err);
+        });
+    return persisting;
+}
+
 // ======================== EQUIPES ========================
 
 async function getEquipes(): Promise<Equipe[]> {
-    const data = await dbGet(dataKey('equipes'));
-    return data || [];
+    await carregarDados();
+    return dadosMemo!.equipes;
 }
 
 async function salvarEquipe(equipe: Equipe): Promise<Equipe> {
-    const equipes = await getEquipes();
-    if (equipe.id) {
-        const idx = equipes.findIndex(e => e.id === equipe.id);
-        if (idx !== -1) equipes[idx] = equipe;
+    await carregarDados();
+    const equipes = dadosMemo!.equipes;
+    const idx = equipes.findIndex(e => e.id === equipe.id);
+    if (idx !== -1) {
+        equipes[idx] = equipe;
     } else {
         equipe.id = genId();
         equipe.criadoEm = new Date().toISOString();
         equipes.push(equipe);
     }
-    await dbSet(dataKey('equipes'), equipes);
+    await persistirDados();
     return equipe;
 }
 
 async function excluirEquipe(id: string): Promise<void> {
-    const equipes = await getEquipes();
-    const nova = equipes.filter(e => e.id !== id);
-    await dbSet(dataKey('equipes'), nova);
+    await carregarDados();
+    dadosMemo!.equipes = dadosMemo!.equipes.filter(e => e.id !== id);
+    await persistirDados();
 }
 
 // ======================== PESSOAL ========================
 
 async function getPessoal(): Promise<Pessoa[]> {
-    const data = await dbGet(dataKey('pessoal'));
-    return data || [];
+    await carregarDados();
+    return dadosMemo!.pessoal;
 }
 
 async function salvarPessoa(pessoa: Pessoa): Promise<Pessoa> {
-    const pessoal = await getPessoal();
-    if (pessoa.id) {
-        const idx = pessoal.findIndex(p => p.id === pessoa.id);
-        if (idx !== -1) pessoal[idx] = pessoa;
+    await carregarDados();
+    const pessoal = dadosMemo!.pessoal;
+    const idx = pessoal.findIndex(p => p.id === pessoa.id);
+    if (idx !== -1) {
+        pessoal[idx] = pessoa;
     } else {
         pessoa.id = genId();
         pessoa.criadoEm = new Date().toISOString();
         pessoal.push(pessoa);
     }
-    await dbSet(dataKey('pessoal'), pessoal);
+    await persistirDados();
     return pessoa;
 }
 
 async function excluirPessoa(id: string): Promise<void> {
-    const pessoal = await getPessoal();
-    const nova = pessoal.filter(p => p.id !== id);
-    await dbSet(dataKey('pessoal'), nova);
+    await carregarDados();
+    dadosMemo!.pessoal = dadosMemo!.pessoal.filter(p => p.id !== id);
+    await persistirDados();
 }
 
 // ======================== PROJETOS ========================
 
 async function getProjetos(): Promise<Projeto[]> {
-    const data = await dbGet(dataKey('projetos'));
-    return data || [];
+    await carregarDados();
+    return dadosMemo!.projetos;
 }
 
 async function salvarProjeto(projeto: Projeto): Promise<Projeto> {
-    const projetos = await getProjetos();
-    if (projeto.id) {
-        const idx = projetos.findIndex(p => p.id === projeto.id);
-        if (idx !== -1) projetos[idx] = projeto;
+    await carregarDados();
+    const projetos = dadosMemo!.projetos;
+    const idx = projetos.findIndex(p => p.id === projeto.id);
+    if (idx !== -1) {
+        projetos[idx] = projeto;
     } else {
         projeto.id = genId();
         projeto.criadoEm = new Date().toISOString();
         projetos.push(projeto);
     }
-    await dbSet(dataKey('projetos'), projetos);
+    await persistirDados();
     return projeto;
 }
 
 async function excluirProjeto(id: string): Promise<void> {
-    const projetos = await getProjetos();
-    const nova = projetos.filter(p => p.id !== id);
-    await dbSet(dataKey('projetos'), nova);
+    await carregarDados();
+    dadosMemo!.projetos = dadosMemo!.projetos.filter(p => p.id !== id);
 
-    // Remove tarefas e anexos vinculados ao projeto
-    const tarefas = await getTarefas();
-    const tarefasRemovidas = tarefas.filter(t => t.projetoId === id);
-    const tarefasRestantes = tarefas.filter(t => t.projetoId !== id);
-    await dbSet(dataKey('tarefas'), tarefasRestantes);
+    // Remove tarefas vinculadas ao projeto
+    const tarefasRemovidas = dadosMemo!.tarefas.filter(t => t.projetoId === id);
+    dadosMemo!.tarefas = dadosMemo!.tarefas.filter(t => t.projetoId !== id);
 
-    // Remove anexos e comentários das tarefas excluídas
-    for (const t of tarefasRemovidas) {
-        await removerAnexosTarefa(t.id);
-    }
+    // Remove anexos e comentários das tarefas excluídas (via API, o vínculo é removido junto)
+    void tarefasRemovidas;
+    await persistirDados();
 }
 
 // ======================== TAREFAS ========================
 
 async function getTarefas(): Promise<Tarefa[]> {
-    const data = await dbGet(dataKey('tarefas'));
-    return data || [];
+    await carregarDados();
+    return dadosMemo!.tarefas;
 }
 
 async function getTarefa(id: string): Promise<Tarefa | null> {
-    const tarefas = await getTarefas();
-    return tarefas.find(t => t.id === id) || null;
+    await carregarDados();
+    return dadosMemo!.tarefas.find(t => t.id === id) || null;
 }
 
 async function salvarTarefa(tarefa: Tarefa): Promise<Tarefa> {
-    const tarefas = await getTarefas();
-    if (tarefa.id) {
-        const idx = tarefas.findIndex(t => t.id === tarefa.id);
-        if (idx !== -1) tarefas[idx] = tarefa;
+    await carregarDados();
+    const tarefas = dadosMemo!.tarefas;
+    const idx = tarefas.findIndex(t => t.id === tarefa.id);
+    if (idx !== -1) {
+        tarefas[idx] = tarefa;
     } else {
         tarefa.id = genId();
         tarefa.criadoEm = new Date().toISOString();
@@ -129,31 +168,31 @@ async function salvarTarefa(tarefa: Tarefa): Promise<Tarefa> {
         tarefa.anexos = tarefa.anexos || [];
         tarefas.push(tarefa);
     }
-    await dbSet(dataKey('tarefas'), tarefas);
+    await persistirDados();
     return tarefa;
 }
 
 async function excluirTarefa(id: string): Promise<void> {
-    const tarefas = await getTarefas();
-    const nova = tarefas.filter(t => t.id !== id);
-    await dbSet(dataKey('tarefas'), nova);
-    await removerAnexosTarefa(id);
+    await carregarDados();
+    dadosMemo!.tarefas = dadosMemo!.tarefas.filter(t => t.id !== id);
+    await persistirDados();
 }
 
 async function atualizarStatusTarefa(id: string, status: string): Promise<void> {
-    const tarefas = await getTarefas();
-    const idx = tarefas.findIndex(t => t.id === id);
+    await carregarDados();
+    const idx = dadosMemo!.tarefas.findIndex(t => t.id === id);
     if (idx !== -1) {
-        tarefas[idx].status = status as StatusTarefa;
-        tarefas[idx].atualizadoEm = new Date().toISOString();
-        await dbSet(dataKey('tarefas'), tarefas);
+        dadosMemo!.tarefas[idx].status = status as StatusTarefa;
+        dadosMemo!.tarefas[idx].atualizadoEm = new Date().toISOString();
+        await persistirDados();
     }
 }
 
 // ======================== COMENTÁRIOS ========================
 
 async function adicionarComentario(tarefaId: string, texto: string): Promise<Comentario> {
-    const tarefas = await getTarefas();
+    await carregarDados();
+    const tarefas = dadosMemo!.tarefas;
     const idx = tarefas.findIndex(t => t.id === tarefaId);
     if (idx === -1) throw new Error('Tarefa não encontrada');
 
@@ -168,70 +207,75 @@ async function adicionarComentario(tarefaId: string, texto: string): Promise<Com
     tarefas[idx].comentarios = tarefas[idx].comentarios || [];
     tarefas[idx].comentarios.push(comentario);
 
-    await dbSet(dataKey('tarefas'), tarefas);
+    await persistirDados();
     return comentario;
 }
 
 async function excluirComentario(tarefaId: string, comentarioId: string): Promise<void> {
-    const tarefas = await getTarefas();
+    await carregarDados();
+    const tarefas = dadosMemo!.tarefas;
     const idx = tarefas.findIndex(t => t.id === tarefaId);
     if (idx === -1) return;
 
     tarefas[idx].comentarios = (tarefas[idx].comentarios || []).filter(c => c.id !== comentarioId);
-    await dbSet(dataKey('tarefas'), tarefas);
+    await persistirDados();
 }
 
 // ======================== ANEXOS ========================
 
-function anexoKey(tarefaId: string, anexoId: string): string {
-    return `user:${getCurrentUser()!.uid}:anexo:${tarefaId}:${anexoId}`;
+function arquivoParaBase64(arquivo: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const result = String(reader.result || '');
+            resolve(result.split(',')[1] || result);
+        };
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(arquivo);
+    });
 }
 
 async function adicionarAnexo(tarefaId: string, arquivo: File): Promise<Anexo> {
-    const tarefas = await getTarefas();
+    await carregarDados();
+    const tarefas = dadosMemo!.tarefas;
     const idx = tarefas.findIndex(t => t.id === tarefaId);
     if (idx === -1) throw new Error('Tarefa não encontrada');
 
-    const id = genId();
     const anexo: Anexo = {
-        id,
+        id: genId(),
         nome: arquivo.name,
         tipo: arquivo.type || 'application/octet-stream',
         tamanho: arquivo.size,
         criadoEm: new Date().toISOString(),
-        autor: getCurrentUser()!.nome
+        autor: getCurrentUser()!.nome,
+        conteudo: await arquivoParaBase64(arquivo)
     };
 
-    // Salva o Blob separadamente
-    await dbSetBlob(anexoKey(tarefaId, id), arquivo);
-
-    // Atualiza o registro da tarefa
     tarefas[idx].anexos = tarefas[idx].anexos || [];
     tarefas[idx].anexos.push(anexo);
-    await dbSet(dataKey('tarefas'), tarefas);
-
+    await persistirDados();
     return anexo;
 }
 
 async function obterBlobAnexo(tarefaId: string, anexoId: string): Promise<Blob | undefined> {
-    return dbGetBlob(anexoKey(tarefaId, anexoId));
+    await carregarDados();
+    const tarefa = dadosMemo!.tarefas.find(t => t.id === tarefaId);
+    const anexo = tarefa && tarefa.anexos ? tarefa.anexos.find(a => a.id === anexoId) : undefined;
+    if (!anexo || !anexo.conteudo) return undefined;
+
+    const bin = atob(anexo.conteudo);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: anexo.tipo || 'application/octet-stream' });
 }
 
 async function excluirAnexo(tarefaId: string, anexoId: string): Promise<void> {
-    const tarefas = await getTarefas();
+    await carregarDados();
+    const tarefas = dadosMemo!.tarefas;
     const idx = tarefas.findIndex(t => t.id === tarefaId);
     if (idx !== -1) {
         tarefas[idx].anexos = (tarefas[idx].anexos || []).filter(a => a.id !== anexoId);
-        await dbSet(dataKey('tarefas'), tarefas);
-    }
-    await dbDeleteBlob(anexoKey(tarefaId, anexoId));
-}
-
-async function removerAnexosTarefa(tarefaId: string): Promise<void> {
-    const tarefa = await getTarefa(tarefaId);
-    if (!tarefa || !tarefa.anexos) return;
-    for (const a of tarefa.anexos) {
-        await dbDeleteBlob(anexoKey(tarefaId, a.id));
+        await persistirDados();
     }
 }
 
@@ -342,10 +386,67 @@ async function importarTudo(dados: any): Promise<void> {
     if (!Array.isArray(dados.equipes) || !Array.isArray(dados.projetos) || !Array.isArray(dados.tarefas)) {
         throw new Error('Estrutura do arquivo inválida.');
     }
-    await dbSet(dataKey('equipes'), dados.equipes);
-    await dbSet(dataKey('projetos'), dados.projetos);
-    await dbSet(dataKey('tarefas'), dados.tarefas);
-    if (Array.isArray(dados.pessoal)) {
-        await dbSet(dataKey('pessoal'), dados.pessoal);
+    await carregarDados();
+    dadosMemo!.equipes = dados.equipes;
+    dadosMemo!.projetos = dados.projetos;
+    dadosMemo!.tarefas = dados.tarefas;
+    dadosMemo!.pessoal = Array.isArray(dados.pessoal) ? dados.pessoal : [];
+    await persistirDados();
+}
+
+// ======================== MIGRAÇÃO (IndexedDB → Postgres) ========================
+
+// Move os dados locais (IndexedDB) para o usuário recém-cadastrado no Postgres
+async function migrarDadosLocais(): Promise<void> {
+    try {
+        await openDB();
+        const keys = await dbKeys('user:');
+
+        // Encontra o uid local com mais dados
+        const porUid: Record<string, { equipes: number; pessoal: number; projetos: number; tarefas: number }> = {};
+        keys.forEach(k => {
+            const m = k.match(/^user:([^:]+):(equipes|pessoal|projetos|tarefas)$/);
+            if (!m) return;
+            if (!porUid[m[1]]) porUid[m[1]] = { equipes: 0, pessoal: 0, projetos: 0, tarefas: 0 };
+        });
+
+        if (keys.length === 0) return;
+
+        // Identifica uids que possuem coleções
+        const uidsComDados: string[] = Object.keys(porUid);
+        if (!uidsComDados.length) return;
+
+        for (let n = 0; n < uidsComDados.length; n++) {
+            const uid = uidsComDados[n];
+            const equipes: Equipe[] = (await dbGet(`user:${uid}:equipes`)) || [];
+            const pessoal: Pessoa[] = (await dbGet(`user:${uid}:pessoal`)) || [];
+            const projetos: Projeto[] = (await dbGet(`user:${uid}:projetos`)) || [];
+            const tarefas: Tarefa[] = (await dbGet(`user:${uid}:tarefas`)) || [];
+
+            const temDados = equipes.length || pessoal.length || projetos.length || tarefas.length;
+            if (!temDados) continue;
+
+            // Carrega blobs de anexos
+            for (const t of tarefas) {
+                for (const a of t.anexos || []) {
+                    const blob = await dbGetBlob(`user:${uid}:anexo:${t.id}:${a.id}`);
+                    if (blob) {
+                        a.conteudo = await arquivoParaBase64(blob);
+                    }
+                }
+            }
+
+            // O servidor só deve ser preenchido se ainda estiver vazio
+            await carregarDados();
+            const totalServidor = (dadosMemo!.equipes.length + dadosMemo!.pessoal.length + dadosMemo!.projetos.length + dadosMemo!.tarefas.length);
+            const totalLocal = equipes.length + pessoal.length + projetos.length + tarefas.length;
+            if (totalServidor >= totalLocal) return;
+
+            dadosMemo = { equipes, pessoal, projetos, tarefas };
+            await persistirDados();
+            return;
+        }
+    } catch (err) {
+        console.warn('Migração de dados locais não executada:', err);
     }
 }
