@@ -1,0 +1,436 @@
+"use server";
+
+import { prisma } from "@/lib/prisma";
+import { handleAction, AppError, ok } from "@/lib/errors";
+import {
+  projectSchema,
+  taskSchema,
+  commentSchema,
+  goalSchema,
+  eventSchema,
+  announcementSchema,
+} from "@/lib/validations";
+import { getContext, guardPerm } from "@/server/guards";
+import { logActivity, notify } from "@/server/activity";
+
+function projectStatus(v?: string) {
+  const map = ["PLANEJAMENTO", "EM_ANDAMENTO", "PAUSADO", "CONCLUIDO"];
+  return v && map.includes(v) ? (v as never) : ("PLANEJAMENTO" as never);
+}
+
+function taskStatus(v?: string) {
+  const map = ["BACKLOG", "TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"];
+  return v && map.includes(v) ? (v as never) : ("TODO" as never);
+}
+
+function taskPriority(v?: string) {
+  const map = ["LOW", "MEDIUM", "HIGH", "URGENT"];
+  return v && map.includes(v) ? (v as "MEDIUM") : ("MEDIUM" as "MEDIUM");
+}
+
+function projectPriority(v?: string) {
+  const map = ["LOW", "MEDIUM", "HIGH", "URGENT"];
+  return v && map.includes(v) ? (v as "MEDIUM") : ("MEDIUM" as "MEDIUM");
+}
+
+// ------------------------------------------------------------
+// PROJETOS
+// ------------------------------------------------------------
+
+export async function createProject(input: unknown) {
+  return handleAction(async () => {
+    const { orgId, session, membership } = await getContext();
+    guardPerm(membership, "projects.write");
+    const data = projectSchema.parse(input);
+    const project = await prisma.project.create({
+      data: {
+        organizationId: orgId,
+        name: data.name.trim(),
+        description: data.description || null,
+        status: projectStatus(data.status),
+        priority: projectPriority(data.priority),
+        startDate: data.startDate ? new Date(data.startDate) : null,
+        dueDate: data.dueDate ? new Date(data.dueDate) : null,
+        teamId: data.teamId || null,
+        responsibleId: data.responsibleId || null,
+        createdById: session.sub,
+        members: {
+          create: data.memberIds.map((m) => ({ memberId: m })),
+        },
+      },
+    });
+    await logActivity(orgId, session.sub, "project.created", "project", project.id, {
+      name: project.name,
+    });
+    return { id: project.id, name: project.name };
+  });
+}
+
+export async function updateProject(input: { id: string } & Record<string, unknown>) {
+  return handleAction(async () => {
+    const { orgId, session, membership } = await getContext();
+    guardPerm(membership, "projects.write");
+    const data = projectSchema.parse(input);
+    const project = await prisma.project.findFirst({
+      where: { id: input.id, organizationId: orgId },
+    });
+    if (!project) throw new AppError("NOT_FOUND", "Projeto não encontrado.", 404);
+    await prisma.project.update({
+      where: { id: project.id },
+      data: {
+        name: data.name.trim(),
+        description: data.description || null,
+        status: projectStatus(data.status),
+        priority: projectPriority(data.priority),
+        startDate: data.startDate ? new Date(data.startDate) : null,
+        dueDate: data.dueDate ? new Date(data.dueDate) : null,
+        teamId: data.teamId || null,
+        responsibleId: data.responsibleId || null,
+      },
+    });
+    await prisma.projectMember.deleteMany({ where: { projectId: project.id } });
+    if (data.memberIds.length) {
+      await prisma.projectMember.createMany({
+        data: data.memberIds.map((m) => ({ projectId: project.id, memberId: m })),
+      });
+    }
+    await logActivity(orgId, session.sub, "project.updated", "project", project.id, {
+      name: data.name,
+    });
+    return ok({});
+  });
+}
+
+export async function deleteProject(id: string) {
+  return handleAction(async () => {
+    const { orgId, session, membership } = await getContext();
+    guardPerm(membership, "projects.delete");
+    const project = await prisma.project.findFirst({ where: { id, organizationId: orgId } });
+    if (!project) throw new AppError("NOT_FOUND", "Projeto não encontrado.", 404);
+    await prisma.project.delete({ where: { id: project.id } });
+    await logActivity(orgId, session.sub, "project.deleted", "project", id, {});
+    return ok({});
+  });
+}
+
+// ------------------------------------------------------------
+// TAREFAS
+// ------------------------------------------------------------
+
+export async function createTask(input: unknown) {
+  return handleAction(async () => {
+    const { orgId, session, membership } = await getContext();
+    guardPerm(membership, "tasks.write");
+    const data = taskSchema.parse(input);
+    const task = await prisma.task.create({
+      data: {
+        organizationId: orgId,
+        title: data.title.trim(),
+        description: data.description || null,
+        status: taskStatus(data.status),
+        priority: taskPriority(data.priority),
+        projectId: data.projectId || null,
+        teamId: data.teamId || null,
+        startDate: data.startDate ? new Date(data.startDate) : null,
+        dueDate: data.dueDate ? new Date(data.dueDate) : null,
+        createdById: session.sub,
+        assignees: {
+          create: data.assigneeIds.map((m) => ({ memberId: m })),
+        },
+      },
+    });
+    await logActivity(orgId, session.sub, "task.created", "task", task.id, {
+      title: task.title,
+    });
+    return { id: task.id, title: task.title };
+  });
+}
+
+export async function updateTask(input: { id: string } & Record<string, unknown>) {
+  return handleAction(async () => {
+    const { orgId, session, membership } = await getContext();
+    guardPerm(membership, "tasks.write");
+    const data = taskSchema.parse(input);
+    const task = await prisma.task.findFirst({
+      where: { id: input.id, organizationId: orgId },
+    });
+    if (!task) throw new AppError("NOT_FOUND", "Tarefa não encontrada.", 404);
+    const status = taskStatus(data.status);
+    const completed = status === "DONE";
+    await prisma.task.update({
+      where: { id: task.id },
+      data: {
+        title: data.title.trim(),
+        description: data.description || null,
+        status,
+        priority: taskPriority(data.priority),
+        projectId: data.projectId || null,
+        teamId: data.teamId || null,
+        startDate: data.startDate ? new Date(data.startDate) : null,
+        dueDate: data.dueDate ? new Date(data.dueDate) : null,
+        completedAt:
+          completed !== Boolean(task.completedAt) ? (completed ? new Date() : null) : task.completedAt,
+      },
+    });
+    await prisma.taskAssignee.deleteMany({ where: { taskId: task.id } });
+    if (data.assigneeIds.length) {
+      await prisma.taskAssignee.createMany({
+        data: data.assigneeIds.map((m) => ({ taskId: task.id, memberId: m })),
+      });
+    }
+    await logActivity(orgId, session.sub, "task.updated", "task", task.id, {
+      title: data.title,
+    });
+    return ok({});
+  });
+}
+
+export async function setTaskStatus(input: { id: string; status: string }) {
+  return handleAction(async () => {
+    const { orgId, session, membership } = await getContext();
+    guardPerm(membership, "tasks.write");
+    const status = taskStatus(input.status);
+    const task = await prisma.task.findFirst({
+      where: { id: input.id, organizationId: orgId },
+    });
+    if (!task) throw new AppError("NOT_FOUND", "Tarefa não encontrada.", 404);
+    const completed = status === "DONE";
+    await prisma.task.update({
+      where: { id: task.id },
+      data: {
+        status,
+        completedAt: completed ? new Date() : completed === false && task.completedAt ? null : task.completedAt,
+      },
+    });
+    await logActivity(orgId, session.sub, "task.status", "task", task.id, { status });
+    return ok({});
+  });
+}
+
+export async function deleteTask(id: string) {
+  return handleAction(async () => {
+    const { orgId, session, membership } = await getContext();
+    guardPerm(membership, "tasks.delete");
+    const task = await prisma.task.findFirst({ where: { id, organizationId: orgId } });
+    if (!task) throw new AppError("NOT_FOUND", "Tarefa não encontrada.", 404);
+    await prisma.task.delete({ where: { id: task.id } });
+    await logActivity(orgId, session.sub, "task.deleted", "task", id, {});
+    return ok({});
+  });
+}
+
+// ------------------------------------------------------------
+// COMENTÁRIOS
+// ------------------------------------------------------------
+
+export async function createComment(input: unknown) {
+  return handleAction(async () => {
+    const { orgId, session } = await getContext();
+    const data = commentSchema.parse(input);
+    const task = await prisma.task.findFirst({
+      where: { id: data.taskId, organizationId: orgId },
+    });
+    if (!task) throw new AppError("NOT_FOUND", "Tarefa não encontrada.", 404);
+    const comment = await prisma.taskComment.create({
+      data: { taskId: task.id, userId: session.sub, text: data.text.trim() },
+    });
+    return { id: comment.id, createdAt: comment.createdAt.toISOString() };
+  });
+}
+
+// ------------------------------------------------------------
+// METAS
+// ------------------------------------------------------------
+
+export async function createGoal(input: unknown) {
+  return handleAction(async () => {
+    const { orgId, session, membership } = await getContext();
+    guardPerm(membership, "goals.write");
+    const data = goalSchema.parse(input);
+    const targetValue = data.targetValue ?? 100;
+    const startValue = data.startValue ?? 0;
+    const goal = await prisma.goal.create({
+      data: {
+        organizationId: orgId,
+        title: data.title.trim(),
+        description: data.description || null,
+        responsibleId: data.responsibleId || null,
+        teamId: data.teamId || null,
+        startValue,
+        targetValue,
+        progress: targetValue ? Math.min(100, Math.round((startValue / targetValue) * 100)) : 0,
+        status: (data.status as never) || "EM_ANDAMENTO",
+        dueDate: data.dueDate ? new Date(data.dueDate) : null,
+      },
+    });
+    await logActivity(orgId, session.sub, "goal.created", "goal", goal.id, {
+      title: goal.title,
+    });
+    return { id: goal.id };
+  });
+}
+
+export async function updateGoal(input: { id: string } & Record<string, unknown>) {
+  return handleAction(async () => {
+    const { orgId, session, membership } = await getContext();
+    guardPerm(membership, "goals.write");
+    const data = goalSchema.parse(input);
+    const goal = await prisma.goal.findFirst({
+      where: { id: input.id, organizationId: orgId },
+    });
+    if (!goal) throw new AppError("NOT_FOUND", "Meta não encontrada.", 404);
+    const startValue = data.startValue ?? goal.startValue;
+    const targetValue = data.targetValue ?? goal.targetValue;
+    const progress = targetValue ? Math.min(100, Math.round((startValue / targetValue) * 100)) : 0;
+    await prisma.goal.update({
+      where: { id: goal.id },
+      data: {
+        title: data.title.trim(),
+        description: data.description || null,
+        responsibleId: data.responsibleId ?? goal.responsibleId,
+        teamId: data.teamId ?? goal.teamId,
+        startValue,
+        targetValue,
+        progress,
+        status: (data.status as never) ?? goal.status,
+        dueDate: data.dueDate ? new Date(data.dueDate) : goal.dueDate,
+      },
+    });
+    await logActivity(orgId, session.sub, "goal.updated", "goal", goal.id, {});
+    return ok({});
+  });
+}
+
+export async function deleteGoal(id: string) {
+  return handleAction(async () => {
+    const { orgId, session, membership } = await getContext();
+    guardPerm(membership, "goals.delete");
+    const goal = await prisma.goal.findFirst({ where: { id, organizationId: orgId } });
+    if (!goal) throw new AppError("NOT_FOUND", "Meta não encontrada.", 404);
+    await prisma.goal.delete({ where: { id: goal.id } });
+    await logActivity(orgId, session.sub, "goal.deleted", "goal", id, {});
+    return ok({});
+  });
+}
+
+// ------------------------------------------------------------
+// EVENTOS / AGENDA
+// ------------------------------------------------------------
+
+export async function createEvent(input: unknown) {
+  return handleAction(async () => {
+    const { orgId, session, membership } = await getContext();
+    guardPerm(membership, "agenda.write");
+    const data = eventSchema.parse(input);
+    const event = await prisma.event.create({
+      data: {
+        organizationId: orgId,
+        title: data.title.trim(),
+        description: data.description || null,
+        type: data.type || "evento",
+        allDay: data.allDay ?? false,
+        startsAt: new Date(data.startsAt),
+        endsAt: data.endsAt ? new Date(data.endsAt) : null,
+        userId: data.type === "pessoal" ? session.sub : null,
+        teamId: data.teamId || null,
+        projectId: data.projectId || null,
+      },
+    });
+    await logActivity(orgId, session.sub, "event.created", "event", event.id, {
+      title: event.title,
+    });
+    return { id: event.id };
+  });
+}
+
+export async function deleteEvent(id: string) {
+  return handleAction(async () => {
+    const { orgId, session, membership } = await getContext();
+    guardPerm(membership, "agenda.write");
+    const event = await prisma.event.findFirst({ where: { id, organizationId: orgId } });
+    if (!event) throw new AppError("NOT_FOUND", "Evento não encontrado.", 404);
+    await prisma.event.delete({ where: { id: event.id } });
+    await logActivity(orgId, session.sub, "event.deleted", "event", id, {});
+    return ok({});
+  });
+}
+
+// ------------------------------------------------------------
+// AVISOS
+// ------------------------------------------------------------
+
+export async function createAnnouncement(input: unknown) {
+  return handleAction(async () => {
+    const { orgId, session, membership } = await getContext();
+    guardPerm(membership, "announcements.write");
+    const data = announcementSchema.parse(input);
+    const audience = data.audience || "company";
+    const a = await prisma.announcement.create({
+      data: {
+        organizationId: orgId,
+        title: data.title.trim(),
+        message: data.message.trim(),
+        audience,
+        audienceId: data.audienceId || null,
+        createdById: session.sub,
+      },
+    });
+    let targets: string[] = [];
+    if (audience === "company") {
+      const members = await prisma.organizationMember.findMany({
+        where: { organizationId: orgId },
+        select: { userId: true },
+      });
+      targets = members.map((m) => m.userId);
+    } else if (audience === "team" && data.audienceId) {
+      const tm = await prisma.teamMember.findMany({
+        where: { teamId: data.audienceId },
+        select: { member: { select: { userId: true } } },
+      });
+      targets = tm.map((t) => t.member.userId);
+    } else if (audience === "department" && data.audienceId) {
+      const ms = await prisma.organizationMember.findMany({
+        where: { organizationId: orgId, departmentId: data.audienceId },
+        select: { userId: true },
+      });
+      targets = ms.map((m) => m.userId);
+    } else if (audience === "user" && data.audienceId) {
+      targets = [data.audienceId];
+    }
+    for (const userId of targets.filter((id) => id !== session.sub)) {
+      await notify(orgId, userId, "announcement", a.title, a.message.slice(0, 160));
+    }
+    await logActivity(orgId, session.sub, "announcement.created", "announcement", a.id, {
+      title: a.title,
+      audience,
+    });
+    return { id: a.id };
+  });
+}
+
+export async function deleteAnnouncement(id: string) {
+  return handleAction(async () => {
+    const { orgId, session, membership } = await getContext();
+    guardPerm(membership, "announcements.delete");
+    const a = await prisma.announcement.findFirst({ where: { id, organizationId: orgId } });
+    if (!a) throw new AppError("NOT_FOUND", "Aviso não encontrado.", 404);
+    await prisma.announcement.delete({ where: { id: a.id } });
+    await logActivity(orgId, session.sub, "announcement.deleted", "announcement", id, {});
+    return ok({});
+  });
+}
+
+// ------------------------------------------------------------
+// NOTIFICAÇÕES
+// ------------------------------------------------------------
+
+export async function markNotificationsRead() {
+  return handleAction(async () => {
+    const { orgId, session } = await getContext();
+    await prisma.notification.updateMany({
+      where: { organizationId: orgId, userId: session.sub, readAt: null },
+      data: { readAt: new Date() },
+    });
+    return ok({});
+  });
+}

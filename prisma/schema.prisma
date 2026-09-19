@@ -1,5 +1,6 @@
 // ============================================================
-// SCHEMA PRISMA - PostgreSQL (Neon)
+// TEAMFLOW - SCHEMA PRISMA (PostgreSQL / Neon)
+// Modular monolith · multi-tenant · RBAC
 // ============================================================
 
 generator client {
@@ -11,97 +12,680 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Usuario {
-  id        String    @id @default(cuid())
-  nome      String
-  email     String    @unique
-  senha     String
-  criadoEm  DateTime  @default(now())
-  equipes   Equipe[]
-  pessoal   Pessoa[]
-  projetos  Projeto[]
-  tarefas   Tarefa[]
-  sessoes   Sessao[]
+// ------------------------------------------------------------
+// ENUMS
+// ------------------------------------------------------------
+
+enum RoleName {
+  OWNER
+  ADMIN
+  MANAGER
+  LEADER
+  MEMBER
 }
 
-model Sessao {
-  token     String    @id
-  usuarioId String
-  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  criadoEm  DateTime  @default(now())
+enum MemberStatus {
+  ATIVO
+  INATIVO
 }
 
-model Pessoa {
-  id          String   @id
-  usuarioId   String
-  usuario     Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  nome        String
-  cargo       String   @default("")
-  funcao      String   @default("")
-  departamento String  @default("")
-  email       String   @default("")
-  telefone    String   @default("")
-  criadoEm    DateTime @default(now())
+enum ProjectStatus {
+  PLANEJAMENTO
+  EM_ANDAMENTO
+  PAUSADO
+  CONCLUIDO
 }
 
-model Equipe {
-  id          String  @id
-  usuarioId   String
-  usuario     Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  nome        String
-  departamento String @default("")
-  lider       String  @default("")
-  descricao   String  @default("")
-  membros     Json    @default("[]")
-  criadoEm    DateTime @default(now())
+enum ProjectPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
 }
 
-model Projeto {
-  id         String   @id
-  usuarioId  String
-  usuario    Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  nome       String
-  cliente    String   @default("")
-  equipeId   String   @default("")
-  prazo      String   @default("")
-  status     String   @default("planejamento")
-  descricao  String   @default("")
-  criadoEm   DateTime @default(now())
+enum TaskStatus {
+  BACKLOG
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
 }
 
-model Tarefa {
-  id           String       @id
-  usuarioId    String
-  usuario      Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  titulo       String
-  projetoId    String       @default("")
-  responsavel  String       @default("")
-  status       String       @default("a_fazer")
-  prazo        String       @default("")
-  descricao    String       @default("")
-  criadoEm     DateTime     @default(now())
-  atualizadoEm DateTime?
-  comentarios  Comentario[]
-  anexos       Anexo[]
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
 }
 
-model Comentario {
-  id        String   @id
-  tarefaId  String
-  tarefa    Tarefa   @relation(fields: [tarefaId], references: [id], onDelete: Cascade)
-  texto     String
-  autor     String   @default("")
-  criadoEm  DateTime @default(now())
+enum GoalStatus {
+  PLANEJAMENTO
+  EM_ANDAMENTO
+  CONCLUIDO
 }
 
-model Anexo {
-  id        String   @id
-  tarefaId  String
-  tarefa    Tarefa   @relation(fields: [tarefaId], references: [id], onDelete: Cascade)
-  nome      String
-  tipo      String   @default("")
-  tamanho   Int      @default(0)
-  criadoEm  DateTime @default(now())
-  autor     String   @default("")
-  conteudo  Bytes?
+enum PlanTier {
+  STARTER
+  PROFESSIONAL
+  BUSINESS
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+// ------------------------------------------------------------
+// USUÁRIOS E ORGANIZAÇÕES (multi-tenancy)
+// ------------------------------------------------------------
+
+model User {
+  id           String               @id @default(cuid())
+  name         String
+  email        String               @unique
+  passwordHash String
+  avatarUrl    String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  memberships  OrganizationMember[]
+  comments     TaskComment[]
+  attachments  TaskAttachment[]
+  createdTasks Task[]
+  events       Event[]
+  notifications Notification[]
+  announcements Announcement[]
+  activityLogs ActivityLog[]
+
+  @@map("users")
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  segment   String?
+  size      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members       OrganizationMember[]
+  departments   Department[]
+  teams         Team[]
+  projects      Project[]
+  tasks         Task[]
+  goals         Goal[]
+  kpis          Kpi[]
+  events        Event[]
+  notifications Notification[]
+  announcements Announcement[]
+  activityLogs  ActivityLog[]
+  subscriptions Subscription[]
+  apiKeys       ApiKey[]
+  integrations  Integration[]
+
+  @@index([slug])
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id           String       @id @default(cuid())
+  organizationId String
+  userId       String
+  role         RoleName     @default(MEMBER)
+  status       MemberStatus @default(ATIVO)
+  jobTitle     String?
+  phone        String?
+  departmentId String?
+  managerId    String?
+  entryDate    DateTime?
+  createdById  String?
+  joinedAt     DateTime     @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department   Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  manager      OrganizationMember? @relation("MemberManager", fields: [managerId], references: [id], onDelete: SetNull)
+  reports      OrganizationMember[] @relation("MemberManager")
+  teamMembers  TeamMember[]
+  projectMemberships ProjectMember[]
+  tasksAsAssignee TaskAssignee[]
+  goalsAsLead  Goal[]
+  goalMembers  GoalMember[]
+  leadOfTeams  Team[]          @relation("TeamLead")
+  projectsAsResponsible Project[] @relation("ProjectResponsible")
+  integrations Integration[]
+
+  @@unique([organizationId, userId])
+  @@index([organizationId])
+  @@index([userId])
+  @@index([departmentId])
+  @@index([managerId])
+  @@map("organization_members")
+}
+
+// ------------------------------------------------------------
+// RBAC
+// ------------------------------------------------------------
+
+model Role {
+  id          String   @id @default(cuid())
+  name        RoleName @unique
+  description String?
+
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String   @id @default(cuid())
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// ------------------------------------------------------------
+// DEPARTAMENTOS · EQUIPES
+// ------------------------------------------------------------
+
+model Department {
+  id          String   @id @default(cuid())
+  organizationId String
+  name        String
+  description String?
+  archivedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members     OrganizationMember[]
+  teams       Team[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("departments")
+}
+
+model Team {
+  id          String   @id @default(cuid())
+  organizationId String
+  name        String
+  description String?
+  leadId      String?
+  departmentId String?
+  archivedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead          OrganizationMember? @relation("TeamLead", fields: [leadId], references: [id], onDelete: SetNull)
+  department    Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  members       TeamMember[]
+  projects      Project[]
+  tasks         Task[]
+  goals         Goal[]
+  events        Event[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@index([leadId])
+  @@index([departmentId])
+  @@map("teams")
+}
+
+model TeamMember {
+  id         String   @id @default(cuid())
+  teamId     String
+  memberId   String
+  joinedAt   DateTime @default(now())
+
+  team    Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  member  OrganizationMember  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, memberId])
+  @@index([teamId])
+  @@index([memberId])
+  @@map("team_members")
+}
+
+// ------------------------------------------------------------
+// PROJETOS
+// ------------------------------------------------------------
+
+model Project {
+  id           String         @id @default(cuid())
+  organizationId String
+  name         String
+  description  String?
+  status       ProjectStatus  @default(PLANEJAMENTO)
+  priority     ProjectPriority @default(MEDIUM)
+  startDate    DateTime?
+  dueDate      DateTime?
+  teamId       String?
+  responsibleId String?
+  createdById  String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team          Team?       @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  responsible   OrganizationMember? @relation("ProjectResponsible", fields: [responsibleId], references: [id], onDelete: SetNull)
+  members       ProjectMember[]
+  tasks         Task[]
+  events        Event[]
+  activityLogs  ActivityLog[]
+
+  @@index([organizationId])
+  @@index([teamId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("projects")
+}
+
+model ProjectMember {
+  id        String @id @default(cuid())
+  projectId String
+  memberId  String
+  joinedAt  DateTime @default(now())
+
+  project Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  member  OrganizationMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, memberId])
+  @@index([projectId])
+  @@index([memberId])
+  @@map("project_members")
+}
+
+// ------------------------------------------------------------
+// TAREFAS
+// ------------------------------------------------------------
+
+model Task {
+  id           String       @id @default(cuid())
+  organizationId String
+  title        String
+  description  String?
+  status       TaskStatus   @default(TODO)
+  priority     TaskPriority @default(MEDIUM)
+  projectId    String?
+  teamId       String?
+  createdById  String?
+  startDate    DateTime?
+  dueDate      DateTime?
+  estimate     Int?
+  completedAt  DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  team         Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  createdBy    User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  assignees    TaskAssignee[]
+  comments     TaskComment[]
+  checklist    TaskChecklist[]
+  attachments  TaskAttachment[]
+  tags         TaskTag[]
+  events       Event[]
+  activityLogs ActivityLog[]
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([teamId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([createdAt])
+  @@map("tasks")
+}
+
+model TaskAssignee {
+  id       String       @id @default(cuid())
+  taskId   String
+  memberId String
+  assignedAt DateTime  @default(now())
+
+  task   Task                @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  member OrganizationMember  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, memberId])
+  @@index([taskId])
+  @@index([memberId])
+  @@map("task_assignees")
+}
+
+model TaskComment {
+  id      String   @id @default(cuid())
+  taskId  String
+  userId  String?
+  text    String
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([taskId])
+  @@map("task_comments")
+}
+
+model TaskChecklist {
+  id         String   @id @default(cuid())
+  taskId     String
+  title      String
+  isDone     Boolean  @default(false)
+  position   Int      @default(0)
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@map("task_checklist")
+}
+
+model TaskAttachment {
+  id      String   @id @default(cuid())
+  taskId  String
+  userId  String?
+  name    String
+  type    String   @default("")
+  size    Int      @default(0)
+  url     String?
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([taskId])
+  @@map("task_attachments")
+}
+
+model TaskTag {
+  id     String @id @default(cuid())
+  taskId String
+  name   String
+  color  String @default("slate")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([name])
+  @@map("task_tags")
+}
+
+// ------------------------------------------------------------
+// METAS · KPIs
+// ------------------------------------------------------------
+
+model Goal {
+  id           String     @id @default(cuid())
+  organizationId String
+  title        String
+  description  String?
+  status       GoalStatus @default(EM_ANDAMENTO)
+  responsibleId String?
+  teamId       String?
+  startValue   Float      @default(0)
+  targetValue  Float      @default(0)
+  progress     Float      @default(0)
+  dueDate      DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  responsible OrganizationMember? @relation(fields: [responsibleId], references: [id], onDelete: SetNull)
+  team        Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  members     GoalMember[]
+  activityLogs ActivityLog[]
+
+  @@index([organizationId])
+  @@index([responsibleId])
+  @@index([teamId])
+  @@map("goals")
+}
+
+model GoalMember {
+  id     String @id @default(cuid())
+  goalId String
+  memberId String
+
+  goal   Goal                @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  member OrganizationMember  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([goalId, memberId])
+  @@map("goal_members")
+}
+
+model Kpi {
+  id           String   @id @default(cuid())
+  organizationId String
+  name         String
+  description  String?
+  type         String   @default("custom")
+  value        Float?
+  config       Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("kpis")
+}
+
+// ------------------------------------------------------------
+// AGENDA / EVENTOS
+// ------------------------------------------------------------
+
+model Event {
+  id           String   @id @default(cuid())
+  organizationId String
+  title        String
+  description  String?
+  type         String   @default("evento")
+  allDay       Boolean  @default(false)
+  startsAt     DateTime
+  endsAt       DateTime?
+  userId       String?
+  teamId       String?
+  projectId    String?
+  taskId       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user     User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  team     Team?    @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  project  Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  task     Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([startsAt])
+  @@map("events")
+}
+
+// ------------------------------------------------------------
+// NOTIFICAÇÕES · AVISOS
+// ------------------------------------------------------------
+
+model Notification {
+  id           String   @id @default(cuid())
+  organizationId String
+  userId       String
+  type         String
+  title        String
+  message      String?
+  readAt       DateTime?
+  createdAt    DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, userId])
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+model Announcement {
+  id           String   @id @default(cuid())
+  organizationId String
+  title        String
+  message      String
+  audience     String   @default("company") // company | department | team | user
+  audienceId   String?
+  createdById  String?
+  createdAt    DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@map("announcements")
+}
+
+// ------------------------------------------------------------
+// AUDITORIA
+// ------------------------------------------------------------
+
+model ActivityLog {
+  id           String   @id @default(cuid())
+  organizationId String
+  projectId    String?
+  taskId       String?
+  goalId       String?
+  userId       String?
+  action       String
+  entity       String
+  entityId     String?
+  oldData      Json?
+  newData      Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  task         Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  goal         Goal?        @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([entity, entityId])
+  @@index([projectId])
+  @@index([taskId])
+  @@index([goalId])
+  @@map("activity_logs")
+}
+
+// ------------------------------------------------------------
+// PLANOS E ASSINATURAS (billing desacoplado)
+// ------------------------------------------------------------
+
+model Plan {
+  id              String   @id @default(cuid())
+  tier            PlanTier @unique
+  name            String
+  maxUsers        Int?
+  maxTeams        Int?
+  maxProjects     Int?
+  maxStorageBytes Int?
+  advancedReports Boolean  @default(false)
+  integrations    Boolean  @default(false)
+  aiFeatures      Boolean  @default(false)
+  priceMonthly    Float    @default(0)
+  priceYearly     Float    @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  id                 String             @id @default(cuid())
+  organizationId     String
+  planId             String
+  status             SubscriptionStatus @default(TRIALING)
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  cancelAtPeriodEnd  Boolean            @default(false)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan         Plan         @relation(fields: [planId], references: [id], onDelete: Restrict)
+  invoices     Invoice[]
+
+  @@index([organizationId])
+  @@map("subscriptions")
+}
+
+model Invoice {
+  id             String          @id @default(cuid())
+  subscriptionId String
+  amount         Float
+  currency       String          @default("BRL")
+  status         String          @default("PENDENTE")
+  dueAt          DateTime?
+  paidAt         DateTime?
+  createdAt      DateTime        @default(now())
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@map("invoices")
+}
+
+// ------------------------------------------------------------
+// INTEGRAÇÕES E API
+// ------------------------------------------------------------
+
+model Integration {
+  id           String   @id @default(cuid())
+  organizationId String
+  provider     String
+  config       Json?
+  enabled      Boolean  @default(false)
+  createdById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    OrganizationMember? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, provider])
+  @@map("integrations")
+}
+
+model ApiKey {
+  id           String    @id @default(cuid())
+  organizationId String
+  name         String
+  keyHash      String
+  lastUsedAt   DateTime?
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("api_keys")
 }
