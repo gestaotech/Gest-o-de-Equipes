@@ -1,4 +1,5 @@
 import { ZodError } from "zod";
+import { Prisma } from "@prisma/client";
 
 export type ApiError =
   | { code: string; message: string; details?: unknown };
@@ -53,6 +54,18 @@ export function handleAction<T>(fn: () => Promise<T>): Promise<
       }
       if (err instanceof AppError) {
         return { success: false, error: { code: err.code, message: err.message } };
+      }
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === "P2002"
+      ) {
+        return {
+          success: false,
+          error: {
+            code: "DUPLICATE",
+            message: "Já existe um registro com esses dados.",
+          },
+        };
       }
       if (err instanceof Error) {
         console.error("[action]", err);

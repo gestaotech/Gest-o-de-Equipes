@@ -1,5 +1,6 @@
 "use server";
 
+import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { handleAction, AppError, ok } from "@/lib/errors";
 import {
@@ -7,9 +8,15 @@ import {
   teamSchema,
   collaboratorSchema,
 } from "@/lib/validations";
-import { getContext, guardPerm } from "@/server/guards";
+import {
+  getContext,
+  guardPerm,
+  guardCanAssign,
+  validateOrgReferences,
+} from "@/server/guards";
 import { logActivity } from "@/server/activity";
 import { hashPassword } from "@/lib/auth";
+import { ROLE_ORDER } from "@/lib/rbac";
 
 const normalizeEmail = (e: string) => e.trim().toLowerCase();
 
@@ -84,6 +91,10 @@ export async function createTeam(input: unknown) {
       where: { organizationId: orgId, name },
     });
     if (exists) throw new AppError("DUPLICATE", "Já existe uma equipe com esse nome.", 409);
+    await validateOrgReferences(orgId, {
+      members: [data.leadId, ...data.memberIds],
+      departments: [data.departmentId],
+    });
     const team = await prisma.team.create({
       data: {
         organizationId: orgId,
@@ -115,6 +126,10 @@ export async function updateTeam(input: { id: string } & Record<string, unknown>
       where: { organizationId: orgId, name: data.name.trim(), NOT: { id: team.id } },
     });
     if (dup) throw new AppError("DUPLICATE", "Já existe uma equipe com esse nome.", 409);
+    await validateOrgReferences(orgId, {
+      members: [data.leadId, ...data.memberIds],
+      departments: [data.departmentId],
+    });
     await prisma.$transaction([
       prisma.team.update({
         where: { id: team.id },
@@ -179,7 +194,7 @@ export async function addCollaborator(input: unknown) {
             name: data.name.trim(),
             email,
             passwordHash: await hashPassword(
-              Math.random().toString(36).slice(2) + Date.now().toString(36)
+              randomBytes(24).toString("hex")
             ),
           },
         });
@@ -189,12 +204,11 @@ export async function addCollaborator(input: unknown) {
     } else {
       // Sem e-mail: cria usuário de caixa com e-mail derivado (sem login real).
       const base = slugify(data.name.trim()) || "colaborador";
-      const localEmail = `${base}@sem-email.teamflow`;
       const u = await prisma.user.create({
         data: {
           name: data.name.trim(),
-          email: localEmail,
-          passwordHash: await hashPassword(Math.random().toString(36)),
+          email: await uniqueDummyEmail(base),
+          passwordHash: await hashPassword(randomBytes(24).toString("hex")),
         },
       });
       userId = u.id;
@@ -206,6 +220,13 @@ export async function addCollaborator(input: unknown) {
         ? data.permission
         : "MEMBER"
     ) as "OWNER" | "ADMIN" | "MANAGER" | "LEADER" | "MEMBER";
+    guardCanAssign(membership, role);
+
+    await validateOrgReferences(orgId, {
+      members: [data.managerId],
+      departments: [data.departmentId],
+      teams: [data.teamId],
+    });
 
     const member = await prisma.organizationMember.create({
       data: {
@@ -245,6 +266,18 @@ function slugify(t: string) {
     .replace(/^-+|-+$/g, "");
 }
 
+async function uniqueDummyEmail(base: string): Promise<string> {
+  const candidate = `${base}@sem-email.teamflow`;
+  const exists = await prisma.user.findUnique({ where: { email: candidate } });
+  if (!exists) return candidate;
+  for (let i = 1; i < 100; i++) {
+    const next = `${base}-${i}@sem-email.teamflow`;
+    const used = await prisma.user.findUnique({ where: { email: next } });
+    if (!used) return next;
+  }
+  return `${base}-${randomBytes(3).toString("hex")}@sem-email.teamflow`;
+}
+
 export async function updateCollaborator(input: { id: string } & Record<string, unknown>) {
   return handleAction(async () => {
     const { orgId, session, membership } = await getContext();
@@ -259,6 +292,13 @@ export async function updateCollaborator(input: { id: string } & Record<string, 
         ? data.permission
         : member.role
     ) as "OWNER" | "ADMIN" | "MANAGER" | "LEADER" | "MEMBER";
+    if (data.permission) guardCanAssign(membership, role);
+
+    await validateOrgReferences(orgId, {
+      members: [data.managerId],
+      departments: [data.departmentId],
+      teams: [data.teamId],
+    });
 
     await prisma.organizationMember.update({
       where: { id: member.id },
@@ -301,6 +341,20 @@ export async function removeCollaborator(id: string) {
     if (member.id === membership.id) {
       throw new AppError("SELF_REMOVE", "Você não pode remover a si mesmo.", 400);
     }
+    if (membership.role !== "OWNER" && ROLE_ORDER[member.role] >= ROLE_ORDER[membership.role]) {
+      throw new AppError("FORBIDDEN", "Você não pode remover um colaborador com papel igual ou superior ao seu.", 403);
+    }
+    if (member.role === "OWNER") {
+      if (membership.role !== "OWNER") {
+        throw new AppError("FORBIDDEN", "Somente o proprietário pode remover um proprietário.", 403);
+      }
+      const owners = await prisma.organizationMember.count({
+        where: { organizationId: orgId, role: "OWNER" },
+      });
+      if (owners <= 1) {
+        throw new AppError("LAST_OWNER", "A organização precisa de ao menos um proprietário.", 400);
+      }
+    }
     await prisma.organizationMember.delete({ where: { id: member.id } });
     await logActivity(orgId, session.sub, "member.deleted", "member", id, {
       name: member.user.name,
@@ -322,11 +376,20 @@ export async function setMemberRole(input: { id: string; role: string }) {
       where: { id: input.id, organizationId: orgId },
     });
     if (!member) throw new AppError("NOT_FOUND", "Colaborador não encontrado.", 404);
-    if (member.role === "OWNER" && role !== "OWNER" && member.userId !== session.sub) {
-      throw new AppError("LAST_OWNER", "Transferência de propriedade não suportada ainda.", 400);
+    if (member.userId === session.sub && role !== member.role) {
+      throw new AppError("SELF_ROLE", "Altere seu próprio papel pela edição de perfil (apenas por um administrador).", 400);
     }
-    if (member.userId === session.sub && role === "MEMBER") {
-      throw new AppError("SELF_DEMOTE", "Você não pode rebaixar a si mesmo para Membro.", 400);
+    guardCanAssign(membership, role);
+    if (member.role === "OWNER" && role !== "OWNER") {
+      if (membership.role !== "OWNER") {
+        throw new AppError("FORBIDDEN", "Somente o proprietário pode rebaixar um proprietário.", 403);
+      }
+      const owners = await prisma.organizationMember.count({
+        where: { organizationId: orgId, role: "OWNER" },
+      });
+      if (owners <= 1) {
+        throw new AppError("LAST_OWNER", "A organização precisa de ao menos um proprietário.", 400);
+      }
     }
     await prisma.organizationMember.update({
       where: { id: member.id },

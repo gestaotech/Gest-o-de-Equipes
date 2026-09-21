@@ -33,11 +33,14 @@ export function rolePermits(role: RoleName): string[] {
     "goals.read",
     "agenda.read",
     "announcements.read",
+    "indicators.read",
+    "kpis.read",
   ];
   if (role === "MEMBER") return base;
   if (role === "LEADER") return [
     ...base,
     "tasks.write",
+    "reports.read",
   ];
   if (role === "MANAGER") return [
     ...base,
@@ -52,6 +55,11 @@ export function rolePermits(role: RoleName): string[] {
     "goals.write",
     "agenda.write",
     "announcements.write",
+    "reports.read",
+    "reports.export",
+    "kpis.create",
+    "kpis.update",
+    "kpis.delete",
   ];
   // ADMIN
   return [
@@ -74,6 +82,11 @@ export function rolePermits(role: RoleName): string[] {
     "integrations.write",
     "settings.write",
     "billing.read",
+    "reports.read",
+    "reports.export",
+    "kpis.create",
+    "kpis.update",
+    "kpis.delete",
   ];
 }
 

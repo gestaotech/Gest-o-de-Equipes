@@ -15,6 +15,7 @@ import {
   loginSchema,
   forgotSchema,
   resetSchema,
+  accountUpdateSchema,
 } from "@/lib/validations";
 import { ensureCatalogs } from "@/lib/catalog";
 
@@ -126,23 +127,21 @@ export async function updateAccountInfo(input: {
   newPassword?: string;
 }) {
   return handleAction(async () => {
+    const data = accountUpdateSchema.parse(input);
     const session = await requireSessionApi();
     const user = await prisma.user.findUnique({ where: { id: session.sub } });
     if (!user) throw new AppError("NOT_FOUND", "Usuário não encontrado.", 404);
 
     const next: { name?: string; passwordHash?: string } = {};
-    if (input.name?.trim()) {
-      next.name = input.name.trim();
+    if (data.name?.trim()) {
+      next.name = data.name.trim();
     }
-    if (input.newPassword) {
-      if (!input.currentPassword) {
-        throw new AppError("PASSWORD_REQUIRED", "Informe a senha atual.", 400);
-      }
-      const valid = await verifyPassword(input.currentPassword, user.passwordHash);
+    if (data.newPassword) {
+      const valid = await verifyPassword(data.currentPassword!, user.passwordHash);
       if (!valid) {
         throw new AppError("WRONG_PASSWORD", "Senha atual incorreta.", 400);
       }
-      next.passwordHash = await hashPassword(input.newPassword);
+      next.passwordHash = await hashPassword(data.newPassword);
     }
     if (Object.keys(next).length === 0) return ok({});
     const updated = await prisma.user.update({ where: { id: user.id }, data: next });

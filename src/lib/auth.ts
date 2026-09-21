@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { AppError } from "@/lib/errors";
 import type { OrganizationMember, RoleName } from "@prisma/client";
 
 export const SESSION_COOKIE = "tf_session";
@@ -135,7 +136,7 @@ export async function requireSession(): Promise<SessionPayload> {
 
 export async function requireSessionApi(): Promise<SessionPayload> {
   const session = await getSession();
-  if (!session) throw new Error("UNAUTHORIZED");
+  if (!session) throw new AppError("UNAUTHORIZED", "Não autenticado.", 401);
   return session;
 }
 

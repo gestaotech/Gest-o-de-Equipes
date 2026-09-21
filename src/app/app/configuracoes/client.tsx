@@ -164,7 +164,9 @@ export function SettingsClient({
                   <div>
                     <p className="font-semibold">{plan.name}</p>
                     <p className="text-sm text-muted-foreground">
-                      R$ {plan.priceMonthly}/mês
+                      {plan.priceMonthly > 0
+                        ? `R$ ${plan.priceMonthly.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}/mês`
+                        : "Sob consulta"}
                       {plan.maxUsers ? ` · até ${plan.maxUsers} colaboradores` : " · colaboradores ilimitados"}
                     </p>
                   </div>

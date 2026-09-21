@@ -1,14 +1,15 @@
 "use server";
 
 import { cookies } from "next/headers";
+import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { createSession, requireSessionApi } from "@/lib/auth";
 import { handleAction, AppError, ok } from "@/lib/errors";
-import { orgSchema, onboardingSchema } from "@/lib/validations";
+import { orgSchema, onboardingSchema, orgUpdateSchema } from "@/lib/validations";
 import { ensureCatalogs } from "@/lib/catalog";
 import { slugify } from "@/lib/utils";
+import { getContext, guardRole } from "@/server/guards";
 import { logActivity } from "@/server/activity";
-import type { Prisma } from "@prisma/client";
 
 async function uniqueSlug(base: string): Promise<string> {
   const clean = slugify(base).slice(0, 40) || "empresa";
@@ -16,7 +17,7 @@ async function uniqueSlug(base: string): Promise<string> {
   for (let i = 0; i < 20; i++) {
     const exists = await prisma.organization.findUnique({ where: { slug } });
     if (!exists) return slug;
-    slug = `${clean}-${Math.random().toString(36).slice(2, 6)}`;
+    slug = `${clean}-${randomBytes(3).toString("hex")}`;
   }
   return `${clean}-${Date.now().toString(36)}`;
 }
@@ -66,6 +67,14 @@ export async function createOrganization(input: unknown) {
     await logActivity(org.id, session.sub, "organization.created", "organization", org.id, {
       name: org.name,
     });
+    const store = await cookies();
+    store.set("tf_org", org.id, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 30,
+      path: "/",
+    });
     await createSession({
       sub: session.sub,
       email: session.email,
@@ -78,30 +87,23 @@ export async function createOrganization(input: unknown) {
 
 export async function saveOnboarding(input: unknown) {
   return handleAction(async () => {
-    const session = await requireSessionApi();
+    const { orgId, session, membership } = await getContext();
+    guardRole(membership, "OWNER");
     const data = onboardingSchema.parse(input as Record<string, unknown>);
-    const membership = await prisma.organizationMember.findFirst({
-      where: { userId: session.sub, organizationId: session.orgId },
-      include: { organization: true },
-    });
-    if (!membership) {
-      throw new AppError("NO_ORG", "Você ainda não possui uma organização.", 404);
-    }
-    const org = membership.organization;
 
     await prisma.organization.update({
-      where: { id: org.id },
+      where: { id: orgId },
       data: {
-        name: data.companyName?.trim() || org.name,
-        segment: data.segment || org.segment,
-        size: data.size || org.size,
+        name: data.companyName?.trim() || undefined,
+        segment: data.segment || undefined,
+        size: data.size || undefined,
       },
     });
 
     if (data.teamName) {
       await prisma.team.create({
         data: {
-          organizationId: org.id,
+          organizationId: orgId,
           name: data.teamName.trim(),
           leadId: membership.id,
         },
@@ -112,7 +114,7 @@ export async function saveOnboarding(input: unknown) {
     if (data.projectName) {
       const project = await prisma.project.create({
         data: {
-          organizationId: org.id,
+          organizationId: orgId,
           name: data.projectName.trim(),
           status: "PLANEJAMENTO",
           priority: "MEDIUM",
@@ -126,7 +128,7 @@ export async function saveOnboarding(input: unknown) {
     if (data.taskTitle) {
       await prisma.task.create({
         data: {
-          organizationId: org.id,
+          organizationId: orgId,
           title: data.taskTitle.trim(),
           projectId,
           createdById: session.sub,
@@ -140,7 +142,7 @@ export async function saveOnboarding(input: unknown) {
       });
     }
 
-    await logActivity(org.id, session.sub, "onboarding.completed", "organization", org.id, {
+    await logActivity(orgId, session.sub, "onboarding.completed", "organization", orgId, {
       goal: data.goal || null,
     });
     return ok({});
@@ -168,28 +170,20 @@ export async function switchOrganization(orgId: string) {
   });
 }
 
-export async function updateOrganizationInfo(input: {
-  name?: string;
-  segment?: string | null;
-  size?: string | null;
-}) {
+export async function updateOrganizationInfo(input: unknown) {
   return handleAction(async () => {
-    const session = await requireSessionApi();
-    if (!session.orgId) throw new AppError("NO_ORG", "Sem organização.", 404);
-    const membership = await prisma.organizationMember.findFirst({
-      where: { userId: session.sub, organizationId: session.orgId },
-    });
-    if (!membership) throw new AppError("FORBIDDEN", "Acesso negado.", 403);
+    const { orgId, session, membership } = await getContext();
     if (!["OWNER", "ADMIN"].includes(membership.role)) {
       throw new AppError("FORBIDDEN", "Sem permissão para editar a organização.", 403);
     }
-    const data: Prisma.OrganizationUpdateInput = {};
-    if (input.name?.trim()) data.name = input.name.trim();
-    if (input.segment !== undefined) data.segment = input.segment;
-    if (input.size !== undefined) data.size = input.size;
+    const data = orgUpdateSchema.parse(input);
     const org = await prisma.organization.update({
-      where: { id: session.orgId },
-      data,
+      where: { id: orgId },
+      data: {
+        name: data.name.trim(),
+        segment: data.segment || null,
+        size: data.size || null,
+      },
     });
     await logActivity(org.id, session.sub, "organization.updated", "organization", org.id, {
       name: org.name,

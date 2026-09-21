@@ -62,16 +62,16 @@ const STEPS = [
 const PLANS = [
   {
     name: "Starter",
-    price: "R$ 0",
-    period: "/mês para sempre",
+    price: "R$ 49,90",
+    period: "/mês por empresa",
     desc: "Para começar a organizar pequenos times.",
     features: ["Até 10 colaboradores", "10 projetos ativos", "Todos os módulos", "Suporte por e-mail"],
-    cta: "Começar grátis",
+    cta: "Escolher plano",
     highlight: false,
   },
   {
     name: "Professional",
-    price: "R$ 49",
+    price: "R$ 99,00",
     period: "/mês por empresa",
     desc: "Para times em crescimento que precisam de relatórios.",
     features: [
@@ -86,13 +86,13 @@ const PLANS = [
   },
   {
     name: "Business",
-    price: "R$ 99",
-    period: "/mês por empresa",
-    desc: "Para empresas que querem escala e IA.",
+    price: "Sob consulta",
+    period: "",
+    desc: "Para empresas que querem escala e integrações.",
     features: [
       "Colaboradores ilimitados",
       "Tudo do Professional",
-      "Recursos com IA",
+      "Integrações",
       "SSO e auditoria",
       "Gerente de conta dedicado",
     ],
@@ -103,7 +103,7 @@ const PLANS = [
 
 const FAQ = [
   { q: "O que é o TeamFlow?", a: "É a plataforma de gestão operacional da sua empresa: colaboradores, departamentos, equipes, projetos, tarefas, metas, agenda e comunicados em um único lugar." },
-  { q: "Preciso de cartão de crédito para começar?", a: "Não. O plano Starter é gratuito para sempre, sem cartão de crédito." },
+  { q: "Preciso de cartão de crédito para começar?", a: "Não. Comece com 14 dias grátis, sem cartão de crédito." },
   { q: "Meus dados ficam seguros?", a: "Sim. Usamos PostgreSQL gerenciado, criptografia de senhas e controle de acesso por papel. Cada organização tem seus dados isolados." },
   { q: "Posso cancelar quando quiser?", a: "Sim. Você pode fazer downgrade ou cancelar a assinatura a qualquer momento, sem multa." },
 ];

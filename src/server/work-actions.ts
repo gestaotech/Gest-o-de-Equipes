@@ -10,12 +10,17 @@ import {
   eventSchema,
   announcementSchema,
 } from "@/lib/validations";
-import { getContext, guardPerm } from "@/server/guards";
+import { getContext, guardPerm, validateOrgReferences } from "@/server/guards";
 import { logActivity, notify } from "@/server/activity";
 
 function projectStatus(v?: string) {
   const map = ["PLANEJAMENTO", "EM_ANDAMENTO", "PAUSADO", "CONCLUIDO"];
   return v && map.includes(v) ? (v as never) : ("PLANEJAMENTO" as never);
+}
+
+function goalStatus(v?: string) {
+  const map = ["PLANEJAMENTO", "EM_ANDAMENTO", "CONCLUIDO"];
+  return v && map.includes(v) ? (v as never) : ("EM_ANDAMENTO" as never);
 }
 
 function taskStatus(v?: string) {
@@ -42,6 +47,10 @@ export async function createProject(input: unknown) {
     const { orgId, session, membership } = await getContext();
     guardPerm(membership, "projects.write");
     const data = projectSchema.parse(input);
+    await validateOrgReferences(orgId, {
+      teams: [data.teamId],
+      members: [data.responsibleId, ...data.memberIds],
+    });
     const project = await prisma.project.create({
       data: {
         organizationId: orgId,
@@ -75,6 +84,10 @@ export async function updateProject(input: { id: string } & Record<string, unkno
       where: { id: input.id, organizationId: orgId },
     });
     if (!project) throw new AppError("NOT_FOUND", "Projeto não encontrado.", 404);
+    await validateOrgReferences(orgId, {
+      teams: [data.teamId],
+      members: [data.responsibleId, ...data.memberIds],
+    });
     await prisma.project.update({
       where: { id: project.id },
       data: {
@@ -122,6 +135,11 @@ export async function createTask(input: unknown) {
     const { orgId, session, membership } = await getContext();
     guardPerm(membership, "tasks.write");
     const data = taskSchema.parse(input);
+    await validateOrgReferences(orgId, {
+      teams: [data.teamId],
+      projects: [data.projectId],
+      members: data.assigneeIds,
+    });
     const task = await prisma.task.create({
       data: {
         organizationId: orgId,
@@ -155,6 +173,11 @@ export async function updateTask(input: { id: string } & Record<string, unknown>
       where: { id: input.id, organizationId: orgId },
     });
     if (!task) throw new AppError("NOT_FOUND", "Tarefa não encontrada.", 404);
+    await validateOrgReferences(orgId, {
+      teams: [data.teamId],
+      projects: [data.projectId],
+      members: data.assigneeIds,
+    });
     const status = taskStatus(data.status);
     const completed = status === "DONE";
     await prisma.task.update({
@@ -247,6 +270,10 @@ export async function createGoal(input: unknown) {
     const { orgId, session, membership } = await getContext();
     guardPerm(membership, "goals.write");
     const data = goalSchema.parse(input);
+    await validateOrgReferences(orgId, {
+      teams: [data.teamId],
+      members: [data.responsibleId],
+    });
     const targetValue = data.targetValue ?? 100;
     const startValue = data.startValue ?? 0;
     const goal = await prisma.goal.create({
@@ -259,7 +286,7 @@ export async function createGoal(input: unknown) {
         startValue,
         targetValue,
         progress: targetValue ? Math.min(100, Math.round((startValue / targetValue) * 100)) : 0,
-        status: (data.status as never) || "EM_ANDAMENTO",
+        status: goalStatus(data.status),
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
       },
     });
@@ -279,6 +306,10 @@ export async function updateGoal(input: { id: string } & Record<string, unknown>
       where: { id: input.id, organizationId: orgId },
     });
     if (!goal) throw new AppError("NOT_FOUND", "Meta não encontrada.", 404);
+    await validateOrgReferences(orgId, {
+      teams: [data.teamId ?? goal.teamId],
+      members: [data.responsibleId ?? goal.responsibleId],
+    });
     const startValue = data.startValue ?? goal.startValue;
     const targetValue = data.targetValue ?? goal.targetValue;
     const progress = targetValue ? Math.min(100, Math.round((startValue / targetValue) * 100)) : 0;
@@ -292,7 +323,7 @@ export async function updateGoal(input: { id: string } & Record<string, unknown>
         startValue,
         targetValue,
         progress,
-        status: (data.status as never) ?? goal.status,
+        status: data.status ? goalStatus(data.status) : goal.status,
         dueDate: data.dueDate ? new Date(data.dueDate) : goal.dueDate,
       },
     });
@@ -322,6 +353,10 @@ export async function createEvent(input: unknown) {
     const { orgId, session, membership } = await getContext();
     guardPerm(membership, "agenda.write");
     const data = eventSchema.parse(input);
+    await validateOrgReferences(orgId, {
+      teams: [data.teamId],
+      projects: [data.projectId],
+    });
     const event = await prisma.event.create({
       data: {
         organizationId: orgId,
@@ -349,6 +384,13 @@ export async function deleteEvent(id: string) {
     guardPerm(membership, "agenda.write");
     const event = await prisma.event.findFirst({ where: { id, organizationId: orgId } });
     if (!event) throw new AppError("NOT_FOUND", "Evento não encontrado.", 404);
+    if (
+      event.userId &&
+      event.userId !== session.sub &&
+      !["OWNER", "ADMIN", "MANAGER"].includes(membership.role)
+    ) {
+      throw new AppError("FORBIDDEN", "Apenas o dono do evento pode excluí-lo.", 403);
+    }
     await prisma.event.delete({ where: { id: event.id } });
     await logActivity(orgId, session.sub, "event.deleted", "event", id, {});
     return ok({});
@@ -365,6 +407,27 @@ export async function createAnnouncement(input: unknown) {
     guardPerm(membership, "announcements.write");
     const data = announcementSchema.parse(input);
     const audience = data.audience || "company";
+    if (audience !== "company") {
+      if (!data.audienceId) {
+        throw new AppError("INVALID", "Defina o público do aviso.", 400);
+      }
+      if (audience === "team") {
+        const team = await prisma.team.findFirst({
+          where: { id: data.audienceId, organizationId: orgId },
+        });
+        if (!team) throw new AppError("INVALID_REF", "Equipe inválida.", 400);
+      } else if (audience === "department") {
+        const dep = await prisma.department.findFirst({
+          where: { id: data.audienceId, organizationId: orgId },
+        });
+        if (!dep) throw new AppError("INVALID_REF", "Departamento inválido.", 400);
+      } else if (audience === "user") {
+        const member = await prisma.organizationMember.findFirst({
+          where: { organizationId: orgId, userId: data.audienceId },
+        });
+        if (!member) throw new AppError("INVALID_REF", "Colaborador inválido.", 400);
+      }
+    }
     const a = await prisma.announcement.create({
       data: {
         organizationId: orgId,
@@ -384,7 +447,7 @@ export async function createAnnouncement(input: unknown) {
       targets = members.map((m) => m.userId);
     } else if (audience === "team" && data.audienceId) {
       const tm = await prisma.teamMember.findMany({
-        where: { teamId: data.audienceId },
+        where: { teamId: data.audienceId, team: { organizationId: orgId } },
         select: { member: { select: { userId: true } } },
       });
       targets = tm.map((t) => t.member.userId);

@@ -14,6 +14,8 @@ import {
   Calendar,
   Megaphone,
   Settings,
+  BarChart3,
+  FileBarChart2,
   Bell,
   LogOut,
   Menu,
@@ -30,6 +32,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "@/components/ui/toast";
 import { switchOrganization, createOrganization } from "@/server/org-actions";
 import { logout } from "@/server/auth-actions";
+import { permits } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 
 export type ShellOrg = {
@@ -39,7 +42,15 @@ export type ShellOrg = {
   role: string;
 };
 
-const NAV = [
+type NavItem = {
+  href: string;
+  label: string;
+  icon: any;
+  group?: string;
+  perm?: string;
+};
+
+const NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/app/colaboradores", label: "Colaboradores", icon: Users },
   { href: "/app/departamentos", label: "Departamentos", icon: Building2 },
@@ -49,6 +60,8 @@ const NAV = [
   { href: "/app/metas", label: "Metas", icon: Target },
   { href: "/app/agenda", label: "Agenda", icon: Calendar },
   { href: "/app/avisos", label: "Avisos", icon: Megaphone },
+  { href: "/app/indicadores", label: "Indicadores", icon: BarChart3, group: "Acompanhamento", perm: "indicators.read" },
+  { href: "/app/relatorios", label: "Relatórios", icon: FileBarChart2, group: "Acompanhamento", perm: "reports.read" },
   { href: "/app/configuracoes", label: "Configurações", icon: Settings },
 ];
 
@@ -93,24 +106,37 @@ export function AppShell({
     }, 150);
   }
 
+  const visibleNav = NAV.filter((n) => !n.perm || permits(org.role as any, n.perm));
+
   const nav = (
     <nav className="flex flex-1 flex-col gap-0.5 px-3">
-      {NAV.map((item) => (
-        <Link
-          key={item.href}
-          href={item.href}
-          onClick={() => setOpen(false)}
-          className={cn(
-            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-            isActive(item.href)
-              ? "bg-blue-50 text-blue-700"
-              : "text-muted-foreground hover:bg-accent hover:text-foreground"
-          )}
-        >
-          <item.icon className="h-4 w-4" />
-          {item.label}
-        </Link>
-      ))}
+      {visibleNav.map((item, index) => {
+        const showGroup =
+          item.group &&
+          item.group !== visibleNav[index - 1]?.group;
+        return (
+          <React.Fragment key={item.href}>
+            {showGroup ? (
+              <div className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                {item.group}
+              </div>
+            ) : null}
+            <Link
+              href={item.href}
+              onClick={() => setOpen(false)}
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                isActive(item.href)
+                  ? "bg-blue-50 text-blue-700"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+              )}
+            >
+              <item.icon className="h-4 w-4" />
+              {item.label}
+            </Link>
+          </React.Fragment>
+        );
+      })}
     </nav>
   );
 

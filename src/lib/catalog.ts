@@ -37,6 +37,13 @@ const PERMISSIONS = [
   "integrations.write",
   "settings.write",
   "billing.read",
+  "indicators.read",
+  "kpis.read",
+  "reports.read",
+  "reports.export",
+  "kpis.create",
+  "kpis.update",
+  "kpis.delete",
 ];
 
 const ROLE_MATRIX: Partial<Record<RoleName, string[]>> = {
@@ -61,6 +68,11 @@ const ROLE_MATRIX: Partial<Record<RoleName, string[]>> = {
     "agenda.write",
     "announcements.read",
     "announcements.write",
+    "reports.read",
+    "reports.export",
+    "kpis.create",
+    "kpis.update",
+    "kpis.delete",
   ],
   LEADER: [
     "users.read",
@@ -72,6 +84,9 @@ const ROLE_MATRIX: Partial<Record<RoleName, string[]>> = {
     "goals.read",
     "agenda.read",
     "announcements.read",
+    "indicators.read",
+    "kpis.read",
+    "reports.read",
   ],
   MEMBER: [
     "users.read",
@@ -82,6 +97,8 @@ const ROLE_MATRIX: Partial<Record<RoleName, string[]>> = {
     "goals.read",
     "agenda.read",
     "announcements.read",
+    "indicators.read",
+    "kpis.read",
   ],
 };
 
@@ -106,8 +123,8 @@ const PLANS: {
     advancedReports: false,
     integrations: false,
     aiFeatures: false,
-    priceMonthly: 0,
-    priceYearly: 0,
+    priceMonthly: 49.9,
+    priceYearly: 499,
   },
   {
     tier: "PROFESSIONAL",
@@ -118,8 +135,8 @@ const PLANS: {
     advancedReports: true,
     integrations: true,
     aiFeatures: false,
-    priceMonthly: 49,
-    priceYearly: 490,
+    priceMonthly: 99,
+    priceYearly: 990,
   },
   {
     tier: "BUSINESS",
@@ -129,9 +146,9 @@ const PLANS: {
     maxProjects: null as number | null,
     advancedReports: true,
     integrations: true,
-    aiFeatures: true,
-    priceMonthly: 99,
-    priceYearly: 990,
+    aiFeatures: false,
+    priceMonthly: 0,
+    priceYearly: 0,
   },
 ];
 

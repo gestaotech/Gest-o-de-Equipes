@@ -45,6 +45,23 @@ export const orgSchema = z.object({
   size: z.string().max(30).optional(),
 });
 
+export const orgUpdateSchema = z.object({
+  name: z.string().min(2, "Informe o nome da empresa.").max(100).trim(),
+  segment: z.string().max(60).nullable().optional(),
+  size: z.string().max(30).nullable().optional(),
+});
+
+export const accountUpdateSchema = z
+  .object({
+    name: name.optional(),
+    currentPassword: z.string().min(1, "Informe a senha atual.").max(72).optional(),
+    newPassword: pass.optional(),
+  })
+  .refine((d) => !d.newPassword || d.currentPassword, {
+    message: "Informe a senha atual para alterar a senha.",
+    path: ["currentPassword"],
+  });
+
 export const onboardingSchema = z.object({
   step: z.number().int().min(0).max(7),
   companyName: z.string().max(120).optional(),
@@ -142,6 +159,28 @@ export const announcementSchema = z.object({
 });
 
 export const idSchema = z.object({ id: z.string().min(1) });
+
+/**
+ * Filtros de indicadores/relatórios. `.strict()` garante que
+ * organização venha SEMPRE da sessão no servidor (nunca do cliente).
+ */
+export const indicatorScopeSchema = z
+  .object({
+    period: z
+      .enum(["today", "7d", "30d", "90d", "month", "prevMonth", "quarter", "year", "custom"])
+      .optional(),
+    from: z.string().optional(),
+    to: z.string().optional(),
+    teamId: z.string().optional(),
+    departmentId: z.string().optional(),
+    memberId: z.string().optional(),
+    projectId: z.string().optional(),
+    status: z
+      .enum(["BACKLOG", "TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"])
+      .optional(),
+    priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
+  })
+  .strict();
 
 export const pgEnumValues = {
   role: ["OWNER", "ADMIN", "MANAGER", "LEADER", "MEMBER"],
