@@ -24,6 +24,7 @@ import {
   ChevronsUpDown,
   SwitchCamera,
   Plus,
+  UserRound,
 } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
 import { Avatar } from "@/components/ui/avatar";
@@ -74,7 +75,7 @@ export function AppShell({
 }: {
   org: ShellOrg;
   orgs: ShellOrg[];
-  user: { id: string; name: string; email: string };
+  user: { id: string; name: string; email: string; avatarUrl?: string | null };
   unread: number;
   children: React.ReactNode;
 }) {
@@ -146,7 +147,7 @@ export function AppShell({
         align="left"
         trigger={
           <button className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-accent">
-            <Avatar name={user.name} />
+            <Avatar name={user.name} src={user.avatarUrl ?? undefined} />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium">{user.name}</span>
               <span className="block truncate text-xs text-muted-foreground">
@@ -156,6 +157,13 @@ export function AppShell({
           </button>
         }
         items={[
+          {
+            label: "Meu perfil",
+            icon: <UserRound className="h-4 w-4" />,
+            onClick: () => {
+              router.push("/profile");
+            },
+          },
           {
             label: "Minhas configurações",
             icon: <Settings className="h-4 w-4" />,
@@ -256,7 +264,9 @@ export function AppShell({
             <Menu className="h-5 w-5" />
           </button>
           <span className="text-sm font-medium text-muted-foreground">
-            {NAV.find((n) => isActive(n.href))?.label ?? "TeamFlow"}
+            {pathname === "/profile"
+              ? "Meu perfil"
+              : NAV.find((n) => isActive(n.href))?.label ?? "TeamFlow"}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -276,10 +286,19 @@ export function AppShell({
             align="right"
             trigger={
               <button className="flex items-center gap-2 rounded-lg p-1.5 hover:bg-accent">
-                <Avatar name={user.name} className="h-8 w-8" />
+                <Avatar
+                  name={user.name}
+                  src={user.avatarUrl ?? undefined}
+                  className="h-8 w-8"
+                />
               </button>
             }
             items={[
+              {
+                label: "Meu perfil",
+                icon: <UserRound className="h-4 w-4" />,
+                onClick: () => router.push("/profile"),
+              },
               {
                 label: "Minhas configurações",
                 icon: <Settings className="h-4 w-4" />,

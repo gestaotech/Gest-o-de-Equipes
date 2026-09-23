@@ -12,7 +12,7 @@ export async function getAppShellData() {
   const [user, orgs, unread] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.sub },
-      select: { id: true, name: true, email: true },
+      select: { id: true, name: true, email: true, avatarUrl: true },
     }),
     prisma.organizationMember.findMany({
       where: { userId: session.sub },

@@ -1,10 +1,12 @@
 "use server";
 
 import { SignJWT, jwtVerify } from "jose";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import {
   createSession,
   destroySession,
+  refreshSessionToken,
   hashPassword,
   verifyPassword,
   requireSessionApi,
@@ -27,6 +29,22 @@ const resetSecret = () => {
 
 const normalizeEmail = (e: string) => e.trim().toLowerCase();
 
+/** Metadados do dispositivo para a lista de sessões (user-agent + IP). */
+async function sessionMeta() {
+  try {
+    const h = await headers();
+    return {
+      userAgent: h.get("user-agent") ?? undefined,
+      ip:
+        h.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+        h.get("x-real-ip") ||
+        undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
 export async function register(input: unknown) {
   return handleAction(async () => {
     const data = signUpSchema.parse(input);
@@ -43,7 +61,7 @@ export async function register(input: unknown) {
       },
     });
     await ensureCatalogs();
-    await createSession({ sub: user.id, email: user.email, name: user.name });
+    await createSession({ sub: user.id, email: user.email, name: user.name }, await sessionMeta());
     return { id: user.id, name: user.name };
   });
 }
@@ -63,12 +81,15 @@ export async function login(input: unknown) {
       orderBy: { joinedAt: "asc" },
       select: { organizationId: true },
     });
-    await createSession({
-      sub: user.id,
-      email: user.email,
-      name: user.name,
-      orgId: membership?.organizationId,
-    });
+    await createSession(
+      {
+        sub: user.id,
+        email: user.email,
+        name: user.name,
+        orgId: membership?.organizationId,
+      },
+      await sessionMeta()
+    );
     return { id: user.id, name: user.name, hasOrg: Boolean(membership) };
   });
 }
@@ -117,6 +138,11 @@ export async function resetPassword(input: unknown) {
       where: { id: user.id },
       data: { passwordHash: await hashPassword(data.password) },
     });
+    // Recuperação de senha invalida todas as sessões do usuário (token antigo morre).
+    await prisma.userSession.updateMany({
+      where: { userId: user.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
     return ok({});
   });
 }
@@ -145,8 +171,13 @@ export async function updateAccountInfo(input: {
     }
     if (Object.keys(next).length === 0) return ok({});
     const updated = await prisma.user.update({ where: { id: user.id }, data: next });
-    await destroySession();
-    await createSession({ sub: updated.id, email: updated.email, name: updated.name });
+    await refreshSessionToken({
+      sub: updated.id,
+      email: updated.email,
+      name: updated.name,
+      orgId: session.orgId,
+      sid: session.sid,
+    });
     return { name: updated.name };
   });
 }

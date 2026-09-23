@@ -88,6 +88,7 @@ model User {
   email        String               @unique
   passwordHash String
   avatarUrl    String?
+  phone        String?
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
 
@@ -99,8 +100,57 @@ model User {
   notifications Notification[]
   announcements Announcement[]
   activityLogs ActivityLog[]
+  sessions     UserSession[]
+  preferences  UserPreference?
 
   @@map("users")
+}
+
+// ------------------------------------------------------------
+// PREFERÊNCIAS DO USUÁRIO (globais do usuário, não do tenant)
+// ------------------------------------------------------------
+
+model UserPreference {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  theme        String   @default("light")
+  locale       String   @default("pt-BR")
+  timezone     String   @default("America/Sao_Paulo")
+  taskNotifications     Boolean  @default(true)
+  projectNotifications  Boolean  @default(true)
+  goalNotifications     Boolean  @default(true)
+  announcementNotifications Boolean @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+// ------------------------------------------------------------
+// SESSÕES DO USUÁRIO (JWT stateless + registro revogável)
+// Só o hash do id de sessão é armazenado; nunca o token.
+// ------------------------------------------------------------
+
+model UserSession {
+  id           String   @id @default(cuid())
+  userId       String
+  tokenHash    String   @unique
+  ipAddress    String?
+  userAgent    String?
+  browser      String?
+  device       String?
+  os           String?
+  lastActiveAt DateTime @default(now())
+  expiresAt    DateTime @default(now())
+  createdAt    DateTime @default(now())
+  revokedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_sessions")
 }
 
 model Organization {

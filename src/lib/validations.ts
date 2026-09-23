@@ -2,7 +2,7 @@ import { z } from "zod";
 
 const pass = z
   .string()
-  .min(6, "A senha precisa de no mínimo 6 caracteres.")
+  .min(8, "A senha precisa de no mínimo 8 caracteres.")
   .max(72, "Senha muito longa.");
 
 const name = z.string().min(2, "Informe seu nome.").max(80, "Nome muito longo.");
@@ -61,6 +61,44 @@ export const accountUpdateSchema = z
     message: "Informe a senha atual para alterar a senha.",
     path: ["currentPassword"],
   });
+
+/** Perfil pessoal — aceita SOMENTE campos do usuário (anti mass-assignment). */
+export const profileSchema = z.object({
+  name: z.string().min(2, "Informe seu nome.").max(120, "Nome muito longo.").trim(),
+  phone: z
+    .string()
+    .max(30, "Telefone inválido.")
+    .regex(/^[0-9+\-\s().]{8,20}$/, "Telefone inválido.")
+    .nullable()
+    .optional(),
+});
+
+/** Alteração de senha — senha atual + nova + confirmação. */
+export const passwordChangeSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Informe a senha atual.").max(72),
+    newPassword: pass,
+    confirm: z.string().min(1, "Confirme a nova senha."),
+  })
+  .refine((d) => d.newPassword === d.confirm, {
+    message: "As senhas não coincidem.",
+    path: ["confirm"],
+  })
+  .refine((d) => d.newPassword !== d.currentPassword, {
+    message: "A nova senha não pode ser igual à atual.",
+    path: ["newPassword"],
+  });
+
+/** Preferências globais do usuário (fora do tenant). */
+export const userPreferencesSchema = z.object({
+  theme: z.enum(["light", "system", "dark"]),
+  locale: z.string().min(2).max(10),
+  timezone: z.string().min(2).max(60),
+  taskNotifications: z.boolean(),
+  projectNotifications: z.boolean(),
+  goalNotifications: z.boolean(),
+  announcementNotifications: z.boolean(),
+});
 
 export const onboardingSchema = z.object({
   step: z.number().int().min(0).max(7),

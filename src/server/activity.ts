@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { preferenceKeyForType } from "@/lib/user-preferences";
 
 export async function logActivity(
   orgId: string,
@@ -33,6 +34,15 @@ export async function notify(
   message?: string
 ): Promise<void> {
   try {
+    // Respeita as preferências globais do usuário (in-system é o único canal).
+    const key = preferenceKeyForType(type);
+    if (key) {
+      const pref = await prisma.userPreference.findUnique({
+        where: { userId },
+        select: { [key]: true },
+      });
+      if (pref && pref[key] === false) return;
+    }
     await prisma.notification.create({
       data: {
         organizationId: orgId,
