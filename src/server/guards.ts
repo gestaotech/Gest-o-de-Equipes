@@ -77,37 +77,42 @@ export async function validateOrgReferences(
   const teams = clean(refs.teams);
   const projects = clean(refs.projects);
 
-  const checks: Promise<number>[] = [];
-  if (members.length) {
-    checks.push(
-      prisma.organizationMember.count({
-        where: { id: { in: members }, organizationId: orgId },
-      })
-    );
-  }
-  if (departments.length) {
-    checks.push(
-      prisma.department.count({
-        where: { id: { in: departments }, organizationId: orgId },
-      })
-    );
-  }
-  if (teams.length) {
-    checks.push(
-      prisma.team.count({ where: { id: { in: teams }, organizationId: orgId } })
-    );
-  }
-  if (projects.length) {
-    checks.push(
-      prisma.project.count({
-        where: { id: { in: projects }, organizationId: orgId },
-      })
-    );
-  }
-  const counts = await Promise.all(checks);
-  const expected = [members.length, departments.length, teams.length, projects.length];
-  if (counts.some((c, i) => c !== expected[i])) {
-    throw new AppError("INVALID_REF", "Um dos vínculos informados é inválido.", 400);
+  const [foundMembers, foundDepartments, foundTeams, foundProjects] = await Promise.all([
+    members.length
+      ? prisma.organizationMember.findMany({
+          where: { id: { in: members }, organizationId: orgId },
+          select: { id: true },
+        })
+      : [],
+    departments.length
+      ? prisma.department.findMany({
+          where: { id: { in: departments }, organizationId: orgId },
+          select: { id: true },
+        })
+      : [],
+    teams.length
+      ? prisma.team.findMany({ where: { id: { in: teams }, organizationId: orgId }, select: { id: true } })
+      : [],
+    projects.length
+      ? prisma.project.findMany({
+          where: { id: { in: projects }, organizationId: orgId },
+          select: { id: true },
+        })
+      : [],
+  ]);
+
+  const invalid = (ids: string[], found: { id: string }[], label: string) => {
+    const missing = ids.filter((id) => !found.some((f) => f.id === id));
+    return missing.length ? `${label}(s) não pertence(m) a esta organização: ${missing.join(", ")}` : "";
+  };
+  const problems = [
+    invalid(members, foundMembers, "Membro"),
+    invalid(departments, foundDepartments, "Departamento"),
+    invalid(teams, foundTeams, "Equipe"),
+    invalid(projects, foundProjects, "Projeto"),
+  ].filter(Boolean);
+  if (problems.length) {
+    throw new AppError("INVALID_REF", `Vínculo inválido: ${problems.join("; ")}`, 400);
   }
 }
 
