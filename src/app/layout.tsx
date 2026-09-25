@@ -9,8 +9,15 @@ const inter = Inter({
   display: "swap",
 });
 
-const APP_URL =
-  process.env.NEXT_PUBLIC_APP_URL ?? "https://teamflow.vercel.app";
+const FALLBACK_URL = "https://teamflow.vercel.app";
+
+const APP_URL = (() => {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_APP_URL || FALLBACK_URL).toString();
+  } catch {
+    return FALLBACK_URL;
+  }
+})();
 
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
