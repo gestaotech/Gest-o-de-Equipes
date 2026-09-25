@@ -45,10 +45,15 @@ async function profileContext(): Promise<SessionPayload> {
 async function logProfile(
   session: SessionPayload,
   action: string,
-  newData?: Prisma.InputJsonValue
+  newData?: unknown
 ) {
   if (session.orgId) {
-    await logActivity(session.orgId, session.sub, action, "user", session.sub, newData);
+    await logActivity({
+      action,
+      entity: "user",
+      entityId: session.sub,
+      newData,
+    });
   }
 }
 

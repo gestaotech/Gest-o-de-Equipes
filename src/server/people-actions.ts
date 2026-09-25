@@ -37,7 +37,12 @@ export async function createDepartment(input: unknown) {
     const dept = await prisma.department.create({
       data: { organizationId: orgId, name, description: data.description || null },
     });
-    await logActivity(orgId, session.sub, "department.created", "department", dept.id, { name });
+    await logActivity({
+      action: "department.created",
+      entity: "department",
+      entityId: dept.id,
+      newData: { name },
+    });
     return { id: dept.id, name: dept.name };
   });
 }
@@ -56,11 +61,16 @@ export async function updateDepartment(input: { id: string } & Record<string, un
       where: { organizationId: orgId, name, NOT: { id: dept.id } },
     });
     if (dup) throw new AppError("DUPLICATE", "Já existe um departamento com esse nome.", 409);
-    await prisma.department.update({
-      where: { id: dept.id },
-      data: { name, description: data.description || null },
+await prisma.department.update({
+       where: { id: dept.id },
+       data: { name, description: data.description || null },
+     });
+    await logActivity({
+      action: "department.updated",
+      entity: "department",
+      entityId: dept.id,
+      newData: { name },
     });
-    await logActivity(orgId, session.sub, "department.updated", "department", dept.id, { name });
     return ok({});
   });
 }
@@ -72,7 +82,12 @@ export async function deleteDepartment(id: string) {
     const dept = await prisma.department.findFirst({ where: { id, organizationId: orgId } });
     if (!dept) throw new AppError("NOT_FOUND", "Departamento não encontrado.", 404);
     await prisma.department.delete({ where: { id } });
-    await logActivity(orgId, session.sub, "department.deleted", "department", id, {});
+    await logActivity({
+      action: "department.deleted",
+      entity: "department",
+      entityId: id,
+      newData: {},
+    });
     return ok({});
   });
 }
@@ -107,9 +122,14 @@ export async function createTeam(input: unknown) {
         },
       },
     });
-    await logActivity(orgId, session.sub, "team.created", "team", team.id, {
-      name,
-      members: data.memberIds.length,
+    await logActivity({
+      action: "team.created",
+      entity: "team",
+      entityId: team.id,
+      newData: {
+        name,
+        members: data.memberIds.length,
+      },
     });
     return { id: team.id, name: team.name };
   });
@@ -131,22 +151,27 @@ export async function updateTeam(input: { id: string } & Record<string, unknown>
       departments: [data.departmentId],
     });
     await prisma.$transaction([
-      prisma.team.update({
-        where: { id: team.id },
-        data: {
-          name: data.name.trim(),
-          description: data.description || null,
-          departmentId: data.departmentId || null,
-          leadId: data.leadId || null,
-        },
-      }),
+prisma.team.update({
+         where: { id: team.id },
+         data: {
+           name: data.name.trim(),
+           description: data.description || null,
+           departmentId: data.departmentId || null,
+           leadId: data.leadId || null,
+         },
+       }),
       prisma.teamMember.deleteMany({ where: { teamId: team.id } }),
       prisma.teamMember.createMany({
         data: data.memberIds.map((m) => ({ teamId: team.id, memberId: m })),
       }),
     ]);
-    await logActivity(orgId, session.sub, "team.updated", "team", team.id, {
-      name: data.name.trim(),
+    await logActivity({
+      action: "team.updated",
+      entity: "team",
+      entityId: team.id,
+      newData: {
+        name: data.name.trim(),
+      },
     });
     return ok({});
   });
@@ -159,7 +184,12 @@ export async function deleteTeam(id: string) {
     const team = await prisma.team.findFirst({ where: { id, organizationId: orgId } });
     if (!team) throw new AppError("NOT_FOUND", "Equipe não encontrada.", 404);
     await prisma.team.delete({ where: { id } });
-    await logActivity(orgId, session.sub, "team.deleted", "team", id, {});
+    await logActivity({
+      action: "team.deleted",
+      entity: "team",
+      entityId: id,
+      newData: {},
+    });
     return ok({});
   });
 }
@@ -247,10 +277,15 @@ export async function addCollaborator(input: unknown) {
       });
     }
 
-    await logActivity(orgId, session.sub, "member.created", "member", member.id, {
-      name: data.name,
-      role,
-      created: createdUser ? "user+member" : "member",
+    await logActivity({
+      action: "member.created",
+      entity: "member",
+      entityId: member.id,
+      newData: {
+        name: data.name,
+        role,
+        created: createdUser ? "user+member" : "member",
+      },
     });
     return { id: member.id, createdUser };
   });
@@ -300,30 +335,35 @@ export async function updateCollaborator(input: { id: string } & Record<string, 
       teams: [data.teamId],
     });
 
-    await prisma.organizationMember.update({
-      where: { id: member.id },
-      data: {
-        role,
-        jobTitle: data.jobTitle || data.role || member.jobTitle,
-        phone: data.phone != null ? data.phone : member.phone,
-        departmentId: data.departmentId ?? member.departmentId,
-        managerId: data.managerId ?? member.managerId,
-        entryDate: data.entryDate ? new Date(data.entryDate) : member.entryDate,
-      },
-    });
-    await prisma.user.update({
-      where: { id: member.userId },
-      data: { name: data.name.trim() },
-      select: { id: true },
-    });
+await prisma.organizationMember.update({
+       where: { id: member.id },
+       data: {
+         role,
+         jobTitle: data.jobTitle || data.role || member.jobTitle,
+         phone: data.phone != null ? data.phone : member.phone,
+         departmentId: data.departmentId ?? member.departmentId,
+         managerId: data.managerId ?? member.managerId,
+         entryDate: data.entryDate ? new Date(data.entryDate) : member.entryDate,
+       },
+     });
+     await prisma.user.update({
+       where: { id: member.userId },
+       data: { name: data.name.trim() },
+       select: { id: true },
+     });
     await prisma.teamMember.deleteMany({ where: { memberId: member.id } });
     if (data.teamId) {
       await prisma.teamMember.create({
         data: { teamId: data.teamId, memberId: member.id },
       });
     }
-    await logActivity(orgId, session.sub, "member.updated", "member", member.id, {
-      name: data.name,
+    await logActivity({
+      action: "member.updated",
+      entity: "member",
+      entityId: member.id,
+      newData: {
+        name: data.name,
+      },
     });
     return ok({});
   });
@@ -356,8 +396,13 @@ export async function removeCollaborator(id: string) {
       }
     }
     await prisma.organizationMember.delete({ where: { id: member.id } });
-    await logActivity(orgId, session.sub, "member.deleted", "member", id, {
-      name: member.user.name,
+    await logActivity({
+      action: "member.deleted",
+      entity: "member",
+      entityId: id,
+      newData: {
+        name: member.user.name,
+      },
     });
     return ok({});
   });
@@ -391,11 +436,16 @@ export async function setMemberRole(input: { id: string; role: string }) {
         throw new AppError("LAST_OWNER", "A organização precisa de ao menos um proprietário.", 400);
       }
     }
-    await prisma.organizationMember.update({
-      where: { id: member.id },
-      data: { role },
+await prisma.organizationMember.update({
+       where: { id: member.id },
+       data: { role },
+     });
+    await logActivity({
+      action: "member.role",
+      entity: "member",
+      entityId: member.id,
+      newData: { role },
     });
-    await logActivity(orgId, session.sub, "member.role", "member", member.id, { role });
     return ok({});
   });
 }

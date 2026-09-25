@@ -68,8 +68,13 @@ export async function createProject(input: unknown) {
         },
       },
     });
-    await logActivity(orgId, session.sub, "project.created", "project", project.id, {
-      name: project.name,
+    await logActivity({
+      action: "project.created",
+      entity: "project",
+      entityId: project.id,
+      newData: {
+        name: project.name,
+      },
     });
     return { id: project.id, name: project.name };
   });
@@ -88,27 +93,32 @@ export async function updateProject(input: { id: string } & Record<string, unkno
       teams: [data.teamId],
       members: [data.responsibleId, ...data.memberIds],
     });
-    await prisma.project.update({
-      where: { id: project.id },
-      data: {
-        name: data.name.trim(),
-        description: data.description || null,
-        status: projectStatus(data.status),
-        priority: projectPriority(data.priority),
-        startDate: data.startDate ? new Date(data.startDate) : null,
-        dueDate: data.dueDate ? new Date(data.dueDate) : null,
-        teamId: data.teamId || null,
-        responsibleId: data.responsibleId || null,
-      },
-    });
+await prisma.project.update({
+       where: { id: project.id },
+       data: {
+         name: data.name.trim(),
+         description: data.description || null,
+         status: projectStatus(data.status),
+         priority: projectPriority(data.priority),
+         startDate: data.startDate ? new Date(data.startDate) : null,
+         dueDate: data.dueDate ? new Date(data.dueDate) : null,
+         teamId: data.teamId || null,
+         responsibleId: data.responsibleId || null,
+       },
+     });
     await prisma.projectMember.deleteMany({ where: { projectId: project.id } });
     if (data.memberIds.length) {
       await prisma.projectMember.createMany({
         data: data.memberIds.map((m) => ({ projectId: project.id, memberId: m })),
       });
     }
-    await logActivity(orgId, session.sub, "project.updated", "project", project.id, {
-      name: data.name,
+    await logActivity({
+      action: "project.updated",
+      entity: "project",
+      entityId: project.id,
+      newData: {
+        name: data.name,
+      },
     });
     return ok({});
   });
@@ -121,7 +131,12 @@ export async function deleteProject(id: string) {
     const project = await prisma.project.findFirst({ where: { id, organizationId: orgId } });
     if (!project) throw new AppError("NOT_FOUND", "Projeto não encontrado.", 404);
     await prisma.project.delete({ where: { id: project.id } });
-    await logActivity(orgId, session.sub, "project.deleted", "project", id, {});
+    await logActivity({
+      action: "project.deleted",
+      entity: "project",
+      entityId: id,
+      newData: {},
+    });
     return ok({});
   });
 }
@@ -157,8 +172,13 @@ export async function createTask(input: unknown) {
         },
       },
     });
-    await logActivity(orgId, session.sub, "task.created", "task", task.id, {
-      title: task.title,
+    await logActivity({
+      action: "task.created",
+      entity: "task",
+      entityId: task.id,
+      newData: {
+        title: task.title,
+      },
     });
     return { id: task.id, title: task.title };
   });
@@ -180,29 +200,34 @@ export async function updateTask(input: { id: string } & Record<string, unknown>
     });
     const status = taskStatus(data.status);
     const completed = status === "DONE";
-    await prisma.task.update({
-      where: { id: task.id },
-      data: {
-        title: data.title.trim(),
-        description: data.description || null,
-        status,
-        priority: taskPriority(data.priority),
-        projectId: data.projectId || null,
-        teamId: data.teamId || null,
-        startDate: data.startDate ? new Date(data.startDate) : null,
-        dueDate: data.dueDate ? new Date(data.dueDate) : null,
-        completedAt:
-          completed !== Boolean(task.completedAt) ? (completed ? new Date() : null) : task.completedAt,
-      },
-    });
+await prisma.task.update({
+       where: { id: task.id },
+       data: {
+         title: data.title.trim(),
+         description: data.description || null,
+         status,
+         priority: taskPriority(data.priority),
+         projectId: data.projectId || null,
+         teamId: data.teamId || null,
+         startDate: data.startDate ? new Date(data.startDate) : null,
+         dueDate: data.dueDate ? new Date(data.dueDate) : null,
+         completedAt:
+           completed !== Boolean(task.completedAt) ? (completed ? new Date() : null) : task.completedAt,
+       },
+     });
     await prisma.taskAssignee.deleteMany({ where: { taskId: task.id } });
     if (data.assigneeIds.length) {
       await prisma.taskAssignee.createMany({
         data: data.assigneeIds.map((m) => ({ taskId: task.id, memberId: m })),
       });
     }
-    await logActivity(orgId, session.sub, "task.updated", "task", task.id, {
-      title: data.title,
+    await logActivity({
+      action: "task.updated",
+      entity: "task",
+      entityId: task.id,
+      newData: {
+        title: data.title,
+      },
     });
     return ok({});
   });
@@ -218,14 +243,19 @@ export async function setTaskStatus(input: { id: string; status: string }) {
     });
     if (!task) throw new AppError("NOT_FOUND", "Tarefa não encontrada.", 404);
     const completed = status === "DONE";
-    await prisma.task.update({
-      where: { id: task.id },
-      data: {
-        status,
-        completedAt: completed ? new Date() : completed === false && task.completedAt ? null : task.completedAt,
-      },
+await prisma.task.update({
+       where: { id: task.id },
+       data: {
+         status,
+         completedAt: completed ? new Date() : completed === false && task.completedAt ? null : task.completedAt,
+       },
+     });
+    await logActivity({
+      action: "task.status",
+      entity: "task",
+      entityId: task.id,
+      newData: { status },
     });
-    await logActivity(orgId, session.sub, "task.status", "task", task.id, { status });
     return ok({});
   });
 }
@@ -237,7 +267,12 @@ export async function deleteTask(id: string) {
     const task = await prisma.task.findFirst({ where: { id, organizationId: orgId } });
     if (!task) throw new AppError("NOT_FOUND", "Tarefa não encontrada.", 404);
     await prisma.task.delete({ where: { id: task.id } });
-    await logActivity(orgId, session.sub, "task.deleted", "task", id, {});
+    await logActivity({
+      action: "task.deleted",
+      entity: "task",
+      entityId: id,
+      newData: {},
+    });
     return ok({});
   });
 }
@@ -290,8 +325,13 @@ export async function createGoal(input: unknown) {
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
       },
     });
-    await logActivity(orgId, session.sub, "goal.created", "goal", goal.id, {
-      title: goal.title,
+    await logActivity({
+      action: "goal.created",
+      entity: "goal",
+      entityId: goal.id,
+      newData: {
+        title: goal.title,
+      },
     });
     return { id: goal.id };
   });
@@ -313,21 +353,26 @@ export async function updateGoal(input: { id: string } & Record<string, unknown>
     const startValue = data.startValue ?? goal.startValue;
     const targetValue = data.targetValue ?? goal.targetValue;
     const progress = targetValue ? Math.min(100, Math.round((startValue / targetValue) * 100)) : 0;
-    await prisma.goal.update({
-      where: { id: goal.id },
-      data: {
-        title: data.title.trim(),
-        description: data.description || null,
-        responsibleId: data.responsibleId ?? goal.responsibleId,
-        teamId: data.teamId ?? goal.teamId,
-        startValue,
-        targetValue,
-        progress,
-        status: data.status ? goalStatus(data.status) : goal.status,
-        dueDate: data.dueDate ? new Date(data.dueDate) : goal.dueDate,
-      },
+await prisma.goal.update({
+       where: { id: goal.id },
+       data: {
+         title: data.title.trim(),
+         description: data.description || null,
+         responsibleId: data.responsibleId ?? goal.responsibleId,
+         teamId: data.teamId ?? goal.teamId,
+         startValue,
+         targetValue,
+         progress,
+         status: data.status ? goalStatus(data.status) : goal.status,
+         dueDate: data.dueDate ? new Date(data.dueDate) : goal.dueDate,
+       },
+     });
+    await logActivity({
+      action: "goal.updated",
+      entity: "goal",
+      entityId: goal.id,
+      newData: {},
     });
-    await logActivity(orgId, session.sub, "goal.updated", "goal", goal.id, {});
     return ok({});
   });
 }
@@ -339,7 +384,12 @@ export async function deleteGoal(id: string) {
     const goal = await prisma.goal.findFirst({ where: { id, organizationId: orgId } });
     if (!goal) throw new AppError("NOT_FOUND", "Meta não encontrada.", 404);
     await prisma.goal.delete({ where: { id: goal.id } });
-    await logActivity(orgId, session.sub, "goal.deleted", "goal", id, {});
+    await logActivity({
+      action: "goal.deleted",
+      entity: "goal",
+      entityId: id,
+      newData: {},
+    });
     return ok({});
   });
 }
@@ -371,8 +421,13 @@ export async function createEvent(input: unknown) {
         projectId: data.projectId || null,
       },
     });
-    await logActivity(orgId, session.sub, "event.created", "event", event.id, {
-      title: event.title,
+    await logActivity({
+      action: "event.created",
+      entity: "event",
+      entityId: event.id,
+      newData: {
+        title: event.title,
+      },
     });
     return { id: event.id };
   });
@@ -392,7 +447,12 @@ export async function deleteEvent(id: string) {
       throw new AppError("FORBIDDEN", "Apenas o dono do evento pode excluí-lo.", 403);
     }
     await prisma.event.delete({ where: { id: event.id } });
-    await logActivity(orgId, session.sub, "event.deleted", "event", id, {});
+    await logActivity({
+      action: "event.deleted",
+      entity: "event",
+      entityId: id,
+      newData: {},
+    });
     return ok({});
   });
 }
@@ -463,9 +523,14 @@ export async function createAnnouncement(input: unknown) {
     for (const userId of targets.filter((id) => id !== session.sub)) {
       await notify(orgId, userId, "announcement", a.title, a.message.slice(0, 160));
     }
-    await logActivity(orgId, session.sub, "announcement.created", "announcement", a.id, {
-      title: a.title,
-      audience,
+    await logActivity({
+      action: "announcement.created",
+      entity: "announcement",
+      entityId: a.id,
+      newData: {
+        title: a.title,
+        audience,
+      },
     });
     return { id: a.id };
   });
@@ -478,7 +543,12 @@ export async function deleteAnnouncement(id: string) {
     const a = await prisma.announcement.findFirst({ where: { id, organizationId: orgId } });
     if (!a) throw new AppError("NOT_FOUND", "Aviso não encontrado.", 404);
     await prisma.announcement.delete({ where: { id: a.id } });
-    await logActivity(orgId, session.sub, "announcement.deleted", "announcement", id, {});
+    await logActivity({
+      action: "announcement.deleted",
+      entity: "announcement",
+      entityId: id,
+      newData: {},
+    });
     return ok({});
   });
 }

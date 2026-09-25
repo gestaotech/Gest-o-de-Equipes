@@ -64,8 +64,13 @@ export async function createOrganization(input: unknown) {
       });
     }
 
-    await logActivity(org.id, session.sub, "organization.created", "organization", org.id, {
-      name: org.name,
+    await logActivity({
+      action: "organization.created",
+      entity: "organization",
+      entityId: org.id,
+      newData: {
+        name: org.name,
+      },
     });
     const store = await cookies();
     store.set("tf_org", org.id, {
@@ -142,8 +147,13 @@ export async function saveOnboarding(input: unknown) {
       });
     }
 
-    await logActivity(orgId, session.sub, "onboarding.completed", "organization", orgId, {
-      goal: data.goal || null,
+    await logActivity({
+      action: "onboarding.completed",
+      entity: "organization",
+      entityId: orgId,
+      newData: {
+        goal: data.goal || null,
+      },
     });
     return ok({});
   });
@@ -185,8 +195,13 @@ export async function updateOrganizationInfo(input: unknown) {
         size: data.size || null,
       },
     });
-    await logActivity(org.id, session.sub, "organization.updated", "organization", org.id, {
-      name: org.name,
+    await logActivity({
+      action: "organization.updated",
+      entity: "organization",
+      entityId: org.id,
+      newData: {
+        name: org.name,
+      },
     });
     return { id: org.id, name: org.name };
   });

@@ -44,6 +44,9 @@ const PERMISSIONS = [
   "kpis.create",
   "kpis.update",
   "kpis.delete",
+  // Auditoria
+  "audit.read",
+  "audit.export",
 ];
 
 const ROLE_MATRIX: Partial<Record<RoleName, string[]>> = {
@@ -59,9 +62,6 @@ const ROLE_MATRIX: Partial<Record<RoleName, string[]>> = {
     "projects.read",
     "projects.write",
     "projects.delete",
-    "tasks.read",
-    "tasks.write",
-    "tasks.delete",
     "goals.read",
     "goals.write",
     "agenda.read",
@@ -73,6 +73,8 @@ const ROLE_MATRIX: Partial<Record<RoleName, string[]>> = {
     "kpis.create",
     "kpis.update",
     "kpis.delete",
+    // Auditoria - MANAGER pode ler auditoria
+    "audit.read",
   ],
   LEADER: [
     "users.read",
@@ -80,7 +82,6 @@ const ROLE_MATRIX: Partial<Record<RoleName, string[]>> = {
     "teams.read",
     "projects.read",
     "tasks.read",
-    "tasks.write",
     "goals.read",
     "agenda.read",
     "announcements.read",
@@ -93,12 +94,12 @@ const ROLE_MATRIX: Partial<Record<RoleName, string[]>> = {
     "departments.read",
     "teams.read",
     "projects.read",
-    "tasks.read",
     "goals.read",
     "agenda.read",
     "announcements.read",
     "indicators.read",
     "kpis.read",
+    "reports.read",
   ],
 };
 

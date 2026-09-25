@@ -75,3 +75,10 @@ export function TableCell({
     />
   );
 }
+
+export function TableCaption({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLTableCaptionElement>) {
+  return <caption className={cn("caption-top", className)} {...props} />;
+}
