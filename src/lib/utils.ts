@@ -24,6 +24,9 @@ export function slugify(text: string): string {
 export function formatDate(value: Date | string | null | undefined): string {
   if (!value) return "—";
   const d = typeof value === "string" ? new Date(value) : value;
+  if (d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0) {
+    return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
+  }
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
@@ -65,6 +68,12 @@ export function currency(value: number | null | undefined): string {
 export function isPastDue(value: Date | string | null | undefined): boolean {
   if (!value) return false;
   const d = typeof value === "string" ? new Date(value) : value;
+  if (d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0) {
+    const due = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
+    const now = new Date();
+    const today = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+    return due < today;
+  }
   return d.getTime() < Date.now();
 }
 

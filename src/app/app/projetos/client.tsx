@@ -14,7 +14,7 @@ import { Badge, statusBadge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { Dropdown } from "@/components/ui/dropdown";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, isPastDue } from "@/lib/utils";
 import { toast } from "@/components/ui/toast";
 
 type Project = {
@@ -199,7 +199,7 @@ export function ProjectsClient({
                     )}
                   </TableCell>
                   <TableCell>
-                    <span className={p.dueDate && new Date(p.dueDate) < new Date() && p.status !== "CONCLUIDO" ? "text-red-600" : ""}>
+                    <span className={p.dueDate && isPastDue(p.dueDate) && p.status !== "CONCLUIDO" ? "text-red-600" : ""}>
                       {formatDate(p.dueDate)}
                     </span>
                   </TableCell>
