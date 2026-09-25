@@ -71,11 +71,11 @@ describe("passwordChangeSchema", () => {
     if (!res.success) expect(res.error.issues[0].path[0]).toBe("confirm");
   });
 
-  it("rejeita nova senha curta (min 8)", () => {
+  it("rejeita nova senha curta (min 6)", () => {
     const res = passwordChangeSchema.safeParse({
       currentPassword: "senha-atual",
-      newPassword: "1234567",
-      confirm: "1234567",
+      newPassword: "12345",
+      confirm: "12345",
     });
     expect(res.success).toBe(false);
   });
@@ -92,19 +92,19 @@ describe("passwordChangeSchema", () => {
 });
 
 describe("política de senha (cadastro)", () => {
-  it("aplica mínimo de 8 caracteres no cadastro", () => {
+  it("aplica mínimo de 6 caracteres no cadastro", () => {
     expect(
       signUpSchema.safeParse({
         name: "João",
         email: "joao@ex.com",
-        password: "1234567",
+        password: "12345",
       }).success
     ).toBe(false);
     expect(
       signUpSchema.safeParse({
         name: "João",
         email: "joao@ex.com",
-        password: "12345678",
+        password: "123456",
       }).success
     ).toBe(true);
   });

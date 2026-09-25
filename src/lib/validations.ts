@@ -2,7 +2,7 @@ import { z } from "zod";
 
 const pass = z
   .string()
-  .min(8, "A senha precisa de no mínimo 8 caracteres.")
+  .min(6, "A senha precisa de no mínimo 6 caracteres.")
   .max(72, "Senha muito longa.");
 
 const name = z.string().min(2, "Informe seu nome.").max(80, "Nome muito longo.");

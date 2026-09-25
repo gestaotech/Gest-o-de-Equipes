@@ -460,8 +460,8 @@ function SegurancaTab({ isOwner }: { isOwner: boolean }) {
   const [delBusy, setDelBusy] = React.useState(false);
 
   async function savePassword() {
-    if (pw.next.length < 8) {
-      toast("A nova senha precisa de no mínimo 8 caracteres.", "error");
+    if (pw.next.length < 6) {
+      toast("A nova senha precisa de no mínimo 6 caracteres.", "error");
       return;
     }
     if (pw.next !== pw.confirm) {
