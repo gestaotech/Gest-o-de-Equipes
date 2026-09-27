@@ -49,7 +49,7 @@ describe("Activity Service", () => {
     vi.clearAllMocks();
     (requireSessionApi as MockedFunction<typeof requireSessionApi>).mockResolvedValue(mockSession);
     (getActiveOrg as MockedFunction<typeof getActiveOrg>).mockResolvedValue({
-      id: mockSession.orgId,
+      id: "org-123",
       name: "Test Org",
       slug: "test",
       role: "ADMIN",
