@@ -16,6 +16,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Dropdown } from "@/components/ui/dropdown";
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/toast";
+import type { ActionResult } from "@/lib/types";
 
 type Team = {
   id: string;
@@ -73,8 +74,8 @@ export function TeamsClient({
       leadId: f.leadId || null,
       memberIds: f.memberIds,
     };
-    const res: any =
-      dialog.mode === "add" ? await createTeam(payload) : await updateTeam({ id: dialog.id!, ...payload });
+    const res =
+      (dialog.mode === "add" ? await createTeam(payload) : await updateTeam({ id: dialog.id!, ...payload })) as ActionResult;
     setBusy(false);
     if (res.success) {
       toast(dialog.mode === "add" ? "Equipe criada." : "Equipe atualizada.");
@@ -88,7 +89,7 @@ export function TeamsClient({
   async function confirmDelete() {
     if (!deleting) return;
     setBusy(true);
-    const res: any = await deleteTeam(deleting.id);
+    const res = (await deleteTeam(deleting.id)) as ActionResult;
     setBusy(false);
     if (res.success) {
       toast("Equipe removida.");

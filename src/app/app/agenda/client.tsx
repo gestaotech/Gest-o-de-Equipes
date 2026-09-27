@@ -13,8 +13,9 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dropdown } from "@/components/ui/dropdown";
-import { formatDate, formatDateTime } from "@/lib/utils";
+import { formatDateTime } from "@/lib/utils";
 import { toast } from "@/components/ui/toast";
+import type { ActionResult } from "@/lib/types";
 
 type Evt = {
   id: string;
@@ -64,17 +65,11 @@ export function AgendaClient({
   events,
   teams,
   projects,
-  members,
-  selfUserId,
-  selfMemberId,
   canWrite,
 }: {
   events: Evt[];
   teams: Sel[];
   projects: Sel[];
-  members: { id: string; user: { id: string; name: string } }[];
-  selfUserId: string;
-  selfMemberId: string;
   canWrite: boolean;
 }) {
   const router = useRouter();
@@ -108,7 +103,7 @@ export function AgendaClient({
     const endsAt = form.endsDate
       ? new Date(`${form.endsDate}T${form.endsTime || "10:00"}`)
       : null;
-    const res: any = await createEvent({
+    const res = (await createEvent({
       title: form.title,
       description: form.description || null,
       type: form.type,
@@ -117,7 +112,7 @@ export function AgendaClient({
       endsAt: endsAt ? endsAt.toISOString() : null,
       teamId: form.teamId || null,
       projectId: form.projectId || null,
-    });
+    })) as ActionResult;
     setBusy(false);
     if (res.success) {
       toast("Evento criado.");
@@ -132,7 +127,7 @@ export function AgendaClient({
   async function confirmDelete() {
     if (!deleting) return;
     setBusy(true);
-    const res: any = await deleteEvent(deleting.id);
+    const res = (await deleteEvent(deleting.id)) as ActionResult;
     setBusy(false);
     if (res.success) {
       toast("Evento removido.");

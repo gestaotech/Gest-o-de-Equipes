@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Agenda" };
 
 export default async function AgendaPage() {
   const app = await getAppShellData();
-  const [events, teams, projects, members] = await Promise.all([
+  const [events, teams, projects] = await Promise.all([
     prisma.event.findMany({
       where: { organizationId: app.org.id },
       include: {
@@ -29,11 +29,6 @@ export default async function AgendaPage() {
       where: { organizationId: app.org.id },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
-    }),
-    prisma.organizationMember.findMany({
-      where: { organizationId: app.org.id },
-      select: { id: true, user: { select: { id: true, name: true } } },
-      orderBy: { joinedAt: "asc" },
     }),
   ]);
 
@@ -56,9 +51,6 @@ export default async function AgendaPage() {
         }))}
         teams={teams}
         projects={projects}
-        members={members}
-        selfUserId={app.session.sub}
-        selfMemberId={app.membershipId}
         canWrite={permits(app.org.role, "agenda.write")}
       />
     </AppShell>

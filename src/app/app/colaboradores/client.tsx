@@ -10,12 +10,13 @@ import { Label } from "@/components/ui/label";
 import { Dialog } from "@/components/ui/dialog";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Badge, statusBadge } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { Dropdown } from "@/components/ui/dropdown";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/components/ui/toast";
 import { formatDate } from "@/lib/utils";
+import type { ActionResult } from "@/lib/types";
 import { ROLE_LABEL } from "@/lib/rbac";
 import type { RoleName } from "@prisma/client";
 
@@ -117,10 +118,10 @@ export function TeammatesClient({
       phone: dialog.form.phone || null,
       entryDate: dialog.form.entryDate || null,
     };
-    const res: any =
-      dialog.mode === "add"
+    const res =
+      (dialog.mode === "add"
         ? await addCollaborator(payload)
-        : await updateCollaborator({ id: dialog.id!, ...payload });
+        : await updateCollaborator({ id: dialog.id!, ...payload })) as ActionResult;
     setBusy(false);
     if (res.success) {
       toast(dialog.mode === "add" ? "Colaborador adicionado!" : "Colaborador atualizado.");
@@ -134,7 +135,7 @@ export function TeammatesClient({
   async function confirmDelete() {
     if (!deleting) return;
     setBusy(true);
-    const res: any = await removeCollaborator(deleting.id);
+    const res = (await removeCollaborator(deleting.id)) as ActionResult;
     setBusy(false);
     if (res.success) {
       toast("Colaborador removido.");

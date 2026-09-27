@@ -14,8 +14,9 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { toast } from "@/components/ui/toast";
-import { ROLE_LABEL, ROLE_ORDER } from "@/lib/rbac";
+import { ROLE_LABEL } from "@/lib/rbac";
 import type { RoleName } from "@prisma/client";
+import type { ActionResult } from "@/lib/types";
 
 type Member = {
   id: string;
@@ -52,7 +53,7 @@ export function SettingsClient({
 
   async function saveOrg() {
     setBusySection("org");
-    const res: any = await updateOrganizationInfo(orgForm);
+    const res = (await updateOrganizationInfo(orgForm)) as ActionResult;
     setBusySection(null);
     if (res.success) {
       toast("Organização atualizada.");
@@ -69,11 +70,11 @@ export function SettingsClient({
       setBusySection(null);
       return;
     }
-    const res: any = await updateAccountInfo({
+    const res = (await updateAccountInfo({
       name: accountForm.name,
       currentPassword: accountForm.currentPassword || undefined,
       newPassword: accountForm.newPassword || undefined,
-    });
+    })) as ActionResult;
     setBusySection(null);
     if (res.success) {
       toast("Conta atualizada.");
@@ -85,7 +86,7 @@ export function SettingsClient({
   }
 
   async function changeRole(member: Member, role: string) {
-    const res: any = await setMemberRole({ id: member.id, role });
+    const res = (await setMemberRole({ id: member.id, role })) as ActionResult;
     if (res.success) {
       toast("Permissão atualizada.");
       router.refresh();
@@ -249,14 +250,14 @@ export function SettingsClient({
                   {canManageMembers ? (
                     <Select
                       className="w-44"
-                      defaultValue={m.role}
+                      value={m.role}
                       onChange={(e) => changeRole(m, e.target.value)}
                       disabled={m.userId === selfUserId}
                     >
                       {roleOptions
                         .filter((r) => r !== "OWNER" || m.role === "OWNER")
                         .map((r) => (
-                          <option key={r} value={r} disabled={ROLE_ORDER[r] < ROLE_ORDER[m.role] && r !== "OWNER" && m.role !== "OWNER" ? false : false}>
+                          <option key={r} value={r}>
                             {ROLE_LABEL[r]}
                           </option>
                         ))}

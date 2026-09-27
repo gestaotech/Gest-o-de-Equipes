@@ -1,12 +1,13 @@
 "use server";
 
 import { SignJWT, jwtVerify } from "jose";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import {
   createSession,
   destroySession,
   refreshSessionToken,
+  sessionTokenHash,
   hashPassword,
   verifyPassword,
   requireSessionApi,
@@ -20,6 +21,7 @@ import {
   accountUpdateSchema,
 } from "@/lib/validations";
 import { ensureCatalogs } from "@/lib/catalog";
+import { logActivity } from "@/server/activity";
 
 const resetSecret = () => {
   const s = process.env.AUTH_SECRET;
@@ -76,21 +78,31 @@ export async function login(input: unknown) {
     if (!user || !valid) {
       throw new AppError("INVALID_CREDENTIALS", "E-mail ou senha incorretos.", 401);
     }
-    const membership = await prisma.organizationMember.findFirst({
-      where: { userId: user.id },
+    // Respeita a organização salva em tf_org; só cai para a mais antiga se
+    // o cookie não apontar para uma organização da qual o usuário faz parte.
+    const store = await cookies();
+    const requestedId = store.get("tf_org")?.value;
+    const membership = requestedId
+      ? await prisma.organizationMember.findFirst({
+          where: { userId: user.id, organizationId: requestedId, status: "ATIVO" },
+          select: { organizationId: true },
+        })
+      : null;
+    const active = membership ?? (await prisma.organizationMember.findFirst({
+      where: { userId: user.id, status: "ATIVO" },
       orderBy: { joinedAt: "asc" },
       select: { organizationId: true },
-    });
+    }));
     await createSession(
       {
         sub: user.id,
         email: user.email,
         name: user.name,
-        orgId: membership?.organizationId,
+        orgId: active?.organizationId,
       },
       await sessionMeta()
     );
-    return { id: user.id, name: user.name, hasOrg: Boolean(membership) };
+    return { id: user.id, name: user.name, hasOrg: Boolean(active) };
   });
 }
 
@@ -104,17 +116,24 @@ export async function requestReset(input: unknown) {
     const data = forgotSchema.parse(input);
     const email = normalizeEmail(data.email);
     const user = await prisma.user.findUnique({ where: { email } });
-    // Sempre responde igual para não vazar e-mails cadastrados.
-    const token = await new SignJWT({ type: "password_reset" })
-      .setProtectedHeader({ alg: "HS256" })
-      .setSubject(user?.id ?? "x")
-      .setIssuedAt()
-      .setExpirationTime("1h")
-      .sign(resetSecret());
+    // Sempre responde "sent" do mesmo jeito para não vazar e-mails cadastrados.
+    // Em produção o token NUNCA é devolvido pela resposta (não há SMTP configurado,
+    // então a recuperação fica restrita ao ambiente local de desenvolvimento).
+    const safeReturn =
+      process.env.NODE_ENV === "production" ? false : Boolean(user);
+    const token =
+      process.env.NODE_ENV === "production"
+        ? null
+        : await new SignJWT({ type: "password_reset" })
+            .setProtectedHeader({ alg: "HS256" })
+            .setSubject(user?.id ?? "x")
+            .setIssuedAt()
+            .setExpirationTime("1h")
+            .sign(resetSecret());
     return {
       sent: Boolean(user),
-      resetToken: user ? token : null,
-      resetUrl: user ? `/resetar-senha?t=${token}` : null,
+      resetToken: safeReturn ? token : null,
+      resetUrl: safeReturn ? `/resetar-senha?t=${token}` : null,
     };
   });
 }
@@ -171,6 +190,17 @@ export async function updateAccountInfo(input: {
     }
     if (Object.keys(next).length === 0) return ok({});
     const updated = await prisma.user.update({ where: { id: user.id }, data: next });
+    // Troca de senha invalida as demais sessões e mantém a atual viva.
+    if (data.newPassword && session.sid) {
+      await prisma.userSession.updateMany({
+        where: {
+          userId: user.id,
+          revokedAt: null,
+          tokenHash: { not: sessionTokenHash(session.sid) },
+        },
+        data: { revokedAt: new Date() },
+      });
+    }
     await refreshSessionToken({
       sub: updated.id,
       email: updated.email,
@@ -178,6 +208,13 @@ export async function updateAccountInfo(input: {
       orgId: session.orgId,
       sid: session.sid,
     });
+    if (data.newPassword && session.orgId) {
+      await logActivity({
+        action: "PASSWORD_CHANGED",
+        entity: "user",
+        entityId: updated.id,
+      });
+    }
     return { name: updated.name };
   });
 }

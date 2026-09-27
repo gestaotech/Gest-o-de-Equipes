@@ -20,21 +20,21 @@ import {
   LogOut,
   Menu,
   X,
-  Check,
   ChevronsUpDown,
   SwitchCamera,
   Plus,
   UserRound,
 } from "lucide-react";
+import type { RoleName } from "@prisma/client";
 import { Logo } from "@/components/ui/logo";
 import { Avatar } from "@/components/ui/avatar";
 import { Dropdown } from "@/components/ui/dropdown";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "@/components/ui/toast";
-import { switchOrganization, createOrganization } from "@/server/org-actions";
+import { switchOrganization } from "@/server/org-actions";
 import { logout } from "@/server/auth-actions";
-import { permits } from "@/lib/rbac";
+import { permits, ROLE_LABEL } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
+import type { ActionResult } from "@/lib/types";
 
 export type ShellOrg = {
   id: string;
@@ -46,7 +46,7 @@ export type ShellOrg = {
 type NavItem = {
   href: string;
   label: string;
-  icon: any;
+  icon: React.ComponentType<{ className?: string }>;
   group?: string;
   perm?: string;
 };
@@ -61,6 +61,8 @@ const NAV: NavItem[] = [
   { href: "/app/metas", label: "Metas", icon: Target },
   { href: "/app/agenda", label: "Agenda", icon: Calendar },
   { href: "/app/avisos", label: "Avisos", icon: Megaphone },
+  { href: "/app/notificacoes", label: "Notificações", icon: Bell },
+  { href: "/app/atividade", label: "Atividade", icon: FileBarChart2, group: "Acompanhamento", perm: "audit.read" },
   { href: "/app/indicadores", label: "Indicadores", icon: BarChart3, group: "Acompanhamento", perm: "indicators.read" },
   { href: "/app/relatorios", label: "Relatórios", icon: FileBarChart2, group: "Acompanhamento", perm: "reports.read" },
   { href: "/app/configuracoes", label: "Configurações", icon: Settings },
@@ -89,7 +91,7 @@ export function AppShell({
   }
 
   async function doSwitch(id: string) {
-    const res: any = await switchOrganization(id);
+    const res = (await switchOrganization(id)) as ActionResult;
     if (res.success) {
       toast("Organização alterada.");
       router.refresh();
@@ -107,7 +109,7 @@ export function AppShell({
     }, 150);
   }
 
-  const visibleNav = NAV.filter((n) => !n.perm || permits(org.role as any, n.perm));
+  const visibleNav = NAV.filter((n) => !n.perm || permits(org.role as RoleName, n.perm));
 
   const nav = (
     <nav className="flex flex-1 flex-col gap-0.5 px-3">
@@ -197,7 +199,7 @@ export function AppShell({
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold">{org.name}</span>
                   <span className="block text-xs text-muted-foreground">
-                    {org.role === "OWNER" ? "Proprietário" : org.role} · {org.slug}
+                    {ROLE_LABEL[org.role as RoleName] ?? org.role} · {org.slug}
                   </span>
                 </span>
                 <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />
@@ -243,7 +245,7 @@ export function AppShell({
               <div className="rounded-lg border bg-background px-3 py-2">
                 <span className="block text-sm font-semibold">{org.name}</span>
                 <span className="block text-xs text-muted-foreground">
-                  {org.role} · {org.slug}
+                  {ROLE_LABEL[org.role as RoleName] ?? org.role} · {org.slug}
                 </span>
               </div>
             </div>

@@ -15,7 +15,7 @@ export async function getAppShellData() {
       select: { id: true, name: true, email: true, avatarUrl: true },
     }),
     prisma.organizationMember.findMany({
-      where: { userId: session.sub },
+      where: { userId: session.sub, status: "ATIVO" },
       include: { organization: { select: { id: true, name: true, slug: true } } },
       orderBy: { joinedAt: "asc" },
     }),

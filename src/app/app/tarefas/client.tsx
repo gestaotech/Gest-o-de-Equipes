@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   Plus,
   Pencil,
@@ -24,12 +24,13 @@ import { Label } from "@/components/ui/label";
 import { Dialog } from "@/components/ui/dialog";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Badge, statusBadge } from "@/components/ui/badge";
+import { statusBadge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { Dropdown } from "@/components/ui/dropdown";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn, formatDate, formatDateTime, isPastDue } from "@/lib/utils";
 import { toast } from "@/components/ui/toast";
+import type { ActionResult } from "@/lib/types";
 
 type Assignee = { id: string; name: string; userId: string };
 type Comment = { id: string; text: string; userName: string; createdAt: Date };
@@ -92,8 +93,6 @@ export function TasksClient({
   projects,
   teams,
   members,
-  selfMemberId,
-  selfUserId,
   canWrite,
   canDelete,
   openNew,
@@ -103,8 +102,6 @@ export function TasksClient({
   projects: Sel[];
   teams: Sel[];
   members: Member[];
-  selfMemberId: string;
-  selfUserId: string;
   canWrite: boolean;
   canDelete: boolean;
   openNew: boolean;
@@ -177,8 +174,8 @@ export function TasksClient({
       startDate: f.startDate || null,
       dueDate: f.dueDate || null,
     };
-    const res: any =
-      dialog.mode === "add" ? await createTask(payload) : await updateTask({ id: dialog.id!, ...payload });
+    const res =
+      (dialog.mode === "add" ? await createTask(payload) : await updateTask({ id: dialog.id!, ...payload })) as ActionResult;
     setBusy(false);
     if (res.success) {
       toast(dialog.mode === "add" ? "Tarefa criada." : "Tarefa atualizada.");
@@ -190,7 +187,7 @@ export function TasksClient({
   }
 
   async function quickStatus(task: Task, status: string) {
-    const res: any = await setTaskStatus({ id: task.id, status });
+    const res = (await setTaskStatus({ id: task.id, status })) as ActionResult;
     if (res.success) {
       toast("Status atualizado.");
       router.refresh();
@@ -202,7 +199,7 @@ export function TasksClient({
   async function confirmDelete() {
     if (!deleting) return;
     setBusy(true);
-    const res: any = await deleteTask(deleting.id);
+    const res = (await deleteTask(deleting.id)) as ActionResult;
     setBusy(false);
     if (res.success) {
       toast("Tarefa removida.");
@@ -216,7 +213,7 @@ export function TasksClient({
 
   async function sendComment() {
     if (!detail || !comment.trim()) return;
-    const res: any = await createComment({ taskId: detail.id, text: comment });
+    const res = (await createComment({ taskId: detail.id, text: comment })) as ActionResult;
     if (res.success) {
       setComment("");
       toast("Comentário adicionado.");

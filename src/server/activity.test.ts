@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, type Mock, type MockedFunction } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { logActivity, logActivityDiff } from "@/server/activity";
-import { requireSessionApi, type SessionPayload } from "@/lib/auth";
+import { requireSessionApi, getActiveOrg, type SessionPayload, type ActiveOrg } from "@/lib/auth";
 
 // Mock do prisma.client para o tipo Prisma
 vi.mock("@prisma/client", () => ({
@@ -25,6 +25,7 @@ vi.mock("@/lib/prisma", () => ({
 // Mock do requireSessionApi
 vi.mock("@/lib/auth", () => ({
   requireSessionApi: vi.fn(),
+  getActiveOrg: vi.fn(),
   sessionTokenHash: vi.fn()
 }));
 
@@ -47,6 +48,13 @@ describe("Activity Service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (requireSessionApi as MockedFunction<typeof requireSessionApi>).mockResolvedValue(mockSession);
+    (getActiveOrg as MockedFunction<typeof getActiveOrg>).mockResolvedValue({
+      id: mockSession.orgId,
+      name: "Test Org",
+      slug: "test",
+      role: "ADMIN",
+      membership: {} as ActiveOrg["membership"],
+    });
   });
 
   describe("logActivity", () => {

@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   ChevronRight,
   FolderKanban,
-  LayoutDashboard,
   ListTodo,
   MessageSquare,
   Target,

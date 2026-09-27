@@ -202,14 +202,14 @@ export async function getActiveOrg(session: SessionPayload): Promise<ActiveOrg |
 
   const membership = requestedId
     ? await prisma.organizationMember.findFirst({
-        where: { userId: session.sub, organizationId: requestedId },
+        where: { userId: session.sub, organizationId: requestedId, status: "ATIVO" },
         include: { organization: true },
       })
     : null;
 
   if (!membership) {
     const first = await prisma.organizationMember.findFirst({
-      where: { userId: session.sub },
+      where: { userId: session.sub, status: "ATIVO" },
       include: { organization: true },
       orderBy: { joinedAt: "asc" },
     });

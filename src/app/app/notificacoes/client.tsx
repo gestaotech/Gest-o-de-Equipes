@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Card } from "@/components/ui/card";
 import { cn, formatRelative } from "@/lib/utils";
 import { toast } from "@/components/ui/toast";
+import type { ActionResult } from "@/lib/types";
 
 type Notif = {
   id: string;
@@ -39,7 +40,7 @@ export function NotificationsClient({
 
   async function markAll() {
     setBusy(true);
-    const res: any = await markNotificationsRead();
+    const res = (await markNotificationsRead()) as ActionResult;
     setBusy(false);
     if (res.success) {
       setUnread(0);

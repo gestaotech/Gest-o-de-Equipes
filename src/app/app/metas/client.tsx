@@ -12,10 +12,10 @@ import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Card } from "@/components/ui/card";
 import { Badge, statusBadge } from "@/components/ui/badge";
-import { Avatar } from "@/components/ui/avatar";
 import { Dropdown } from "@/components/ui/dropdown";
 import { formatDate } from "@/lib/utils";
 import { toast } from "@/components/ui/toast";
+import type { ActionResult } from "@/lib/types";
 
 type Goal = {
   id: string;
@@ -87,12 +87,12 @@ export function GoalsClient({
       status: f.status,
       responsibleId: f.responsibleId || null,
       teamId: f.teamId || null,
-      startValue: Number(f.startValue) || 0,
-      targetValue: Number(f.targetValue) || 100,
+      startValue: f.startValue === "" ? 0 : Number(f.startValue),
+      targetValue: f.targetValue === "" ? 100 : Number(f.targetValue),
       dueDate: f.dueDate || null,
     };
-    const res: any =
-      dialog.mode === "add" ? await createGoal(payload) : await updateGoal({ id: dialog.id!, ...payload });
+    const res =
+      (dialog.mode === "add" ? await createGoal(payload) : await updateGoal({ id: dialog.id!, ...payload })) as ActionResult;
     setBusy(false);
     if (res.success) {
       toast(dialog.mode === "add" ? "Meta criada." : "Meta atualizada.");
@@ -106,7 +106,7 @@ export function GoalsClient({
   async function confirmDelete() {
     if (!deleting) return;
     setBusy(true);
-    const res: any = await deleteGoal(deleting.id);
+    const res = (await deleteGoal(deleting.id)) as ActionResult;
     setBusy(false);
     if (res.success) {
       toast("Meta removida.");

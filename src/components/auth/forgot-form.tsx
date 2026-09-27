@@ -50,10 +50,10 @@ export function ForgotForm() {
             <div className="rounded-lg border border-dashed bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
               Modo dev: use o link{" "}
               <a
-                href={(state as any).data.resetUrl}
+                href={(state as ActionResult & { data?: { resetUrl?: string | null } }).data!.resetUrl!}
                 className="font-mono text-blue-600 underline break-all"
               >
-                {(state as any).data.resetUrl}
+                {(state as ActionResult & { data?: { resetUrl?: string | null } }).data!.resetUrl}
               </a>
             </div>
           )}

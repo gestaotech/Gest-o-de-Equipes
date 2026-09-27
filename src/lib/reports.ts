@@ -82,7 +82,7 @@ export async function getTeamReportRows(
   scope: IndicatorScope,
   range: DateRange | null
 ): Promise<TeamReportRow[]> {
-  const [board, teams] = await Promise.all([
+  const [board, teams, projectCounts] = await Promise.all([
     getTeamBoard(scope, range),
     prisma.team.findMany({
       where: { organizationId: scope.orgId, archivedAt: null },
@@ -91,7 +91,13 @@ export async function getTeamReportRows(
         _count: { select: { members: true } },
       },
     }),
+    prisma.project.groupBy({
+      by: ["teamId"],
+      where: { organizationId: scope.orgId, teamId: { not: null } },
+      _count: { _all: true },
+    }),
   ]);
+  const projectsByTeam = new Map(projectCounts.map((r) => [r.teamId, r._count._all]));
   const byId = new Map(board.map((b) => [b.id, b]));
   return teams.map((t) => {
     const b = byId.get(t.id);
@@ -99,7 +105,7 @@ export async function getTeamReportRows(
       name: t.name,
       department: t.department?.name ?? null,
       membersCount: t._count.members,
-      projectsCount: 0,
+      projectsCount: projectsByTeam.get(t.id) ?? 0,
       total: b?.total ?? 0,
       done: b?.done ?? 0,
       overdue: b?.overdue ?? 0,
@@ -177,13 +183,13 @@ export type Periodish = { period: ReportPeriod; from?: string; to?: string };
 // Exportação CSV (headers + valores por tipo de relatório)
 // ------------------------------------------------------------
 
-export function exportCsv(kind: ReportKind, rows: any[]): string {
+export function exportCsv(kind: ReportKind, rows: readonly unknown[]): string {
   const fallback: [string[], (string | number | null | boolean)[][]] = [[], []];
 
   const byKind: Record<ReportKind, [string[], (string | number | null | boolean)[][]]> = {
     tasks: [
       ["Título", "Projeto", "Responsável", "Equipe", "Status", "Prioridade", "Prazo", "Criada", "Concluída"],
-      rows.map((r: TaskReportRow) => [
+      (rows as TaskReportRow[]).map((r) => [
         r.title,
         r.project ?? "",
         r.responsible ?? "",
@@ -197,7 +203,7 @@ export function exportCsv(kind: ReportKind, rows: any[]): string {
     ],
     projects: [
       ["Nome", "Responsável", "Equipe", "Status", "Prioridade", "Prazo", "Tarefas", "Concluídas", "Atrasadas", "Progresso (%)", "Situação"],
-      rows.map((r: ProjectRow) => [
+      (rows as ProjectRow[]).map((r) => [
         r.name,
         r.responsibleName ?? "",
         r.teamName ?? "",
@@ -213,7 +219,7 @@ export function exportCsv(kind: ReportKind, rows: any[]): string {
     ],
     teams: [
       ["Equipe", "Departamento", "Membros", "Tarefas", "Concluídas", "Atrasadas", "Taxa (%)"],
-      rows.map((r: TeamReportRow) => [
+      (rows as TeamReportRow[]).map((r) => [
         r.name,
         r.department ?? "",
         r.membersCount,
@@ -225,7 +231,7 @@ export function exportCsv(kind: ReportKind, rows: any[]): string {
     ],
     members: [
       ["Nome", "Departamento", "Equipes", "Tarefas", "Concluídas", "Atrasadas", "Projetos", "Metas", "Taxa (%)"],
-      rows.map((r: MemberReportRow) => [
+      (rows as MemberReportRow[]).map((r) => [
         r.name,
         r.department ?? "",
         r.teamNames.join(", "),
@@ -239,7 +245,7 @@ export function exportCsv(kind: ReportKind, rows: any[]): string {
     ],
     goals: [
       ["Meta", "Responsável", "Equipe", "Status", "Progresso (%)", "Situação"],
-      rows.map((r: GoalRow) => [
+      (rows as GoalRow[]).map((r) => [
         r.title,
         r.responsibleName ?? "",
         r.teamName ?? "",

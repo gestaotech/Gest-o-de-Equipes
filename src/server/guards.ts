@@ -52,8 +52,8 @@ export function guardCanAssign(
   targetRole: RoleName
 ): void {
   if (membership.role === "OWNER") return;
-  if (ROLE_ORDER[membership.role] < ROLE_ORDER[targetRole]) {
-    throw new AppError("FORBIDDEN", "Você não pode conceder um papel maior que o seu.", 403);
+  if (ROLE_ORDER[membership.role] <= ROLE_ORDER[targetRole]) {
+    throw new AppError("FORBIDDEN", "Você não pode conceder um papel maior ou igual ao seu.", 403);
   }
 }
 

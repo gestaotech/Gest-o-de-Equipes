@@ -1,11 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { headers } from "next/headers";
-import {
-  requireSessionApi,
-  type SessionPayload,
-} from "@/lib/auth";
-import { parseUserAgent } from "@/lib/user-agent";
+import { requireSessionApi, getActiveOrg } from "@/lib/auth";
 
 /**
  * Sanitiza dados removendo campos sensíveis antes de armazenar no audit log.
@@ -94,25 +90,21 @@ export async function logActivity({
   metadata?: Record<string, unknown>;
 }): Promise<void> {
   try {
-    // Obtém sessão e organização ativa
+    // Obtém sessão e organização ATIVA (cookie tf_org), mesma fonte das actions
     const session = await requireSessionApi();
-    const orgId = session.orgId;
-    
-    if (!orgId) {
+    const org = await getActiveOrg(session);
+    if (!org) {
       // Se não há organização ativa, não registra atividade (deve acontecer apenas em contextos como onboarding)
       return;
     }
+    const orgId = org.id;
 
 // Extrai metadados da requisição
      const { userAgent, ip } = await extractRequestMeta();
 
      // Sanitiza todos os dados de entrada
-     const sanitizedOldData = oldData 
-       ? (Prisma as any).JsonValue.from(sanitizeAuditData(oldData)) 
-       : (Prisma as any).JsonNull;
-     const sanitizedNewData = newData 
-       ? (Prisma as any).JsonValue.from(sanitizeAuditData(newData)) 
-       : (Prisma as any).JsonNull;
+     const sanitizedOld = oldData ? sanitizeAuditData(oldData) : null;
+     const sanitizedNew = newData ? sanitizeAuditData(newData) : metadata ? sanitizeAuditData(metadata) : null;
 
     // Cria o registro de atividade
 await prisma.activityLog.create({
@@ -122,8 +114,8 @@ await prisma.activityLog.create({
          action,
          entity,
          entityId: entityId ?? null,
-         oldData: sanitizedOldData,
-         newData: sanitizedNewData,
+         oldData: sanitizedOld ? (sanitizedOld as Prisma.InputJsonValue) : Prisma.JsonNull,
+         newData: sanitizedNew ? (sanitizedNew as Prisma.InputJsonValue) : Prisma.JsonNull,
          ipAddress: ip ?? null,
          userAgent: userAgent ?? null,
        },

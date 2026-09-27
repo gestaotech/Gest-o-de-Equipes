@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Card } from "@/components/ui/card";
 import { Dropdown } from "@/components/ui/dropdown";
 import { toast } from "@/components/ui/toast";
+import type { ActionResult } from "@/lib/types";
 
 type Dept = {
   id: string;
@@ -39,10 +40,10 @@ export function DepartmentsClient({
     if (!dialog) return;
     setBusy(true);
     const payload = { name: dialog.name, description: dialog.description || null };
-    const res: any =
-      dialog.mode === "add"
+    const res =
+      (dialog.mode === "add"
         ? await createDepartment(payload)
-        : await updateDepartment({ id: dialog.id!, ...payload });
+        : await updateDepartment({ id: dialog.id!, ...payload })) as ActionResult;
     setBusy(false);
     if (res.success) {
       toast(dialog.mode === "add" ? "Departamento criado." : "Departamento atualizado.");
@@ -56,7 +57,7 @@ export function DepartmentsClient({
   async function confirmDelete() {
     if (!deleting) return;
     setBusy(true);
-    const res: any = await deleteDepartment(deleting.id);
+    const res = (await deleteDepartment(deleting.id)) as ActionResult;
     setBusy(false);
     if (res.success) {
       toast("Departamento removido.");

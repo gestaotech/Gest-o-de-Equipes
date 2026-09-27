@@ -16,7 +16,7 @@ export class AppError extends Error {
   }
 }
 
-export function fail(code: string, message: string, status = 400): ApiError {
+export function fail(code: string, message: string): ApiError {
   return { code, message };
 }
 

@@ -55,6 +55,17 @@ export function ScopeFilters({
   const selectCls =
     "flex h-9 items-center rounded-lg border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
+  const filterSelects: Array<{
+    key: "departmentId" | "teamId" | "memberId" | "projectId";
+    options: FilterOption[];
+    label: string;
+  }> = [
+    { key: "departmentId", options: departments, label: "Departamento" },
+    { key: "teamId", options: teams, label: "Equipe" },
+    { key: "memberId", options: members, label: "Colaborador" },
+    { key: "projectId", options: projects, label: "Projeto" },
+  ];
+
   return (
     <Card className="mb-4">
       <CardContent className="flex flex-wrap items-end gap-2 pt-4">
@@ -94,18 +105,15 @@ export function ScopeFilters({
             </label>
           </>
         )}
-        {[
-          { key: "departmentId", options: departments, label: "Departamento" },
-          { key: "teamId", options: teams, label: "Equipe" },
-          { key: "memberId", options: members, label: "Colaborador" },
-          { key: "projectId", options: projects, label: "Projeto" },
-        ].map(({ key, options, label }) => (
+        {filterSelects.map(({ key, options, label }) => (
           <label key={key} className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
             {label}
             <select
               className={selectCls}
-              value={(filters as any)[key] ?? ""}
-              onChange={(e) => apply({ [key]: e.target.value || undefined } as any)}
+              value={filters[key] ?? ""}
+              onChange={(e) =>
+                apply({ [key]: e.target.value || undefined })
+              }
             >
               <option value="">Todos</option>
               {options.map((o) => (
@@ -121,7 +129,7 @@ export function ScopeFilters({
           <select
             className={selectCls}
             value={filters.status ?? ""}
-            onChange={(e) => apply({ status: e.target.value || undefined } as any)}
+            onChange={(e) => apply({ status: e.target.value || undefined })}
           >
             <option value="">Todos</option>
             {["BACKLOG", "TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"].map((s) => (
@@ -136,7 +144,7 @@ export function ScopeFilters({
           <select
             className={selectCls}
             value={filters.priority ?? ""}
-            onChange={(e) => apply({ priority: e.target.value || undefined } as any)}
+            onChange={(e) => apply({ priority: e.target.value || undefined })}
           >
             <option value="">Todas</option>
             {["LOW", "MEDIUM", "HIGH", "URGENT"].map((p) => (

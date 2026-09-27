@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { login } from "@/server/auth-actions";
 import { Button } from "@/components/ui/button";
-import { Input, Select } from "@/components/ui/input";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/components/ui/toast";
@@ -63,7 +63,7 @@ export function LoginForm() {
         </form>
         <div className="mt-4 text-center text-sm text-muted-foreground">
           Esqueceu a senha?{" "}
-          <Link href="/recuperar-senha" className="font-medium text-blue-600 hover:underline">
+          <Link href="/recuperar" className="font-medium text-blue-600 hover:underline">
             Recuperar
           </Link>
         </div>

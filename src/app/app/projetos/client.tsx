@@ -10,12 +10,13 @@ import { Label } from "@/components/ui/label";
 import { Dialog } from "@/components/ui/dialog";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Badge, statusBadge } from "@/components/ui/badge";
+import { statusBadge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { Dropdown } from "@/components/ui/dropdown";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn, formatDate, isPastDue } from "@/lib/utils";
 import { toast } from "@/components/ui/toast";
+import type { ActionResult } from "@/lib/types";
 
 type Project = {
   id: string;
@@ -94,8 +95,8 @@ export function ProjectsClient({
       responsibleId: f.responsibleId || null,
       memberIds: f.memberIds,
     };
-    const res: any =
-      dialog.mode === "add" ? await createProject(payload) : await updateProject({ id: dialog.id!, ...payload });
+    const res =
+      (dialog.mode === "add" ? await createProject(payload) : await updateProject({ id: dialog.id!, ...payload })) as ActionResult;
     setBusy(false);
     if (res.success) {
       toast(dialog.mode === "add" ? "Projeto criado." : "Projeto atualizado.");
@@ -109,7 +110,7 @@ export function ProjectsClient({
   async function confirmDelete() {
     if (!deleting) return;
     setBusy(true);
-    const res: any = await deleteProject(deleting.id);
+    const res = (await deleteProject(deleting.id)) as ActionResult;
     setBusy(false);
     if (res.success) {
       toast("Projeto removido.");

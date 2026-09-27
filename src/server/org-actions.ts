@@ -45,24 +45,25 @@ export async function createOrganization(input: unknown) {
           jobTitle: "Fundador",
         },
       });
+      // Assinatura criada na MESMA transação — org nunca fica sem plano.
+      const starter = await tx.plan.findUnique({
+        where: { tier: "STARTER" },
+      });
+      if (starter) {
+        await tx.subscription.create({
+          data: {
+            organizationId: created.id,
+            planId: starter.id,
+            status: "ACTIVE",
+            currentPeriodStart: new Date(),
+            currentPeriodEnd: new Date(Date.now() + 30 * 86400000),
+          },
+        });
+      }
       return created;
     });
 
     await ensureCatalogs();
-    const starter = await prisma.plan.findUnique({
-      where: { tier: "STARTER" },
-    });
-    if (starter) {
-      await prisma.subscription.create({
-        data: {
-          organizationId: org.id,
-          planId: starter.id,
-          status: "ACTIVE",
-          currentPeriodStart: new Date(),
-          currentPeriodEnd: new Date(Date.now() + 30 * 86400000),
-        },
-      });
-    }
 
     await logActivity({
       action: "organization.created",
@@ -182,7 +183,7 @@ export async function switchOrganization(orgId: string) {
 
 export async function updateOrganizationInfo(input: unknown) {
   return handleAction(async () => {
-    const { orgId, session, membership } = await getContext();
+    const { orgId, membership } = await getContext();
     if (!["OWNER", "ADMIN"].includes(membership.role)) {
       throw new AppError("FORBIDDEN", "Sem permissão para editar a organização.", 403);
     }

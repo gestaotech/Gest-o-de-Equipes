@@ -39,7 +39,7 @@ export function ResetForm() {
       <Card>
         <CardContent className="pt-6">
           <p className="text-sm text-muted-foreground">Link inválido. Solicite novamente a recuperação.</p>
-          <Link href="/recuperar-senha" className="mt-3 inline-block text-sm font-medium text-blue-600 hover:underline">
+          <Link href="/recuperar" className="mt-3 inline-block text-sm font-medium text-blue-600 hover:underline">
             Voltar
           </Link>
         </CardContent>

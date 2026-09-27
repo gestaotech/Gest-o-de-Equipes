@@ -26,7 +26,7 @@ const normalizeEmail = (e: string) => e.trim().toLowerCase();
 
 export async function createDepartment(input: unknown) {
   return handleAction(async () => {
-    const { orgId, session, membership } = await getContext();
+    const { orgId, membership } = await getContext();
     guardPerm(membership, "departments.write");
     const data = departmentSchema.parse(input);
     const name = data.name.trim();
@@ -49,7 +49,7 @@ export async function createDepartment(input: unknown) {
 
 export async function updateDepartment(input: { id: string } & Record<string, unknown>) {
   return handleAction(async () => {
-    const { orgId, session, membership } = await getContext();
+    const { orgId, membership } = await getContext();
     guardPerm(membership, "departments.write");
     const data = departmentSchema.parse(input);
     const name = data.name.trim();
@@ -77,7 +77,7 @@ await prisma.department.update({
 
 export async function deleteDepartment(id: string) {
   return handleAction(async () => {
-    const { orgId, session, membership } = await getContext();
+    const { orgId, membership } = await getContext();
     guardPerm(membership, "departments.delete");
     const dept = await prisma.department.findFirst({ where: { id, organizationId: orgId } });
     if (!dept) throw new AppError("NOT_FOUND", "Departamento não encontrado.", 404);
@@ -98,7 +98,7 @@ export async function deleteDepartment(id: string) {
 
 export async function createTeam(input: unknown) {
   return handleAction(async () => {
-    const { orgId, session, membership } = await getContext();
+    const { orgId, membership } = await getContext();
     guardPerm(membership, "teams.write");
     const data = teamSchema.parse(input);
     const name = data.name.trim();
@@ -137,7 +137,7 @@ export async function createTeam(input: unknown) {
 
 export async function updateTeam(input: { id: string } & Record<string, unknown>) {
   return handleAction(async () => {
-    const { orgId, session, membership } = await getContext();
+    const { orgId, membership } = await getContext();
     guardPerm(membership, "teams.write");
     const data = teamSchema.parse(input);
     const team = await prisma.team.findFirst({ where: { id: input.id, organizationId: orgId } });
@@ -179,7 +179,7 @@ prisma.team.update({
 
 export async function deleteTeam(id: string) {
   return handleAction(async () => {
-    const { orgId, session, membership } = await getContext();
+    const { orgId, membership } = await getContext();
     guardPerm(membership, "teams.delete");
     const team = await prisma.team.findFirst({ where: { id, organizationId: orgId } });
     if (!team) throw new AppError("NOT_FOUND", "Equipe não encontrada.", 404);
@@ -200,7 +200,7 @@ export async function deleteTeam(id: string) {
 
 export async function addCollaborator(input: unknown) {
   return handleAction(async () => {
-    const { orgId, session, membership } = await getContext();
+    const { orgId, membership } = await getContext();
     guardPerm(membership, "users.write");
     const data = collaboratorSchema.parse(input);
     const email = data.email ? normalizeEmail(data.email) : null;
@@ -327,7 +327,23 @@ export async function updateCollaborator(input: { id: string } & Record<string, 
         ? data.permission
         : member.role
     ) as "OWNER" | "ADMIN" | "MANAGER" | "LEADER" | "MEMBER";
-    if (data.permission) guardCanAssign(membership, role);
+    if (data.permission) {
+      guardCanAssign(membership, role);
+      if (member.userId === session.sub && role !== member.role) {
+        throw new AppError("SELF_ROLE", "Você não pode alterar seu próprio papel por aqui.", 400);
+      }
+      if (member.role === "OWNER" && role !== "OWNER") {
+        if (membership.role !== "OWNER") {
+          throw new AppError("FORBIDDEN", "Somente o proprietário pode rebaixar um proprietário.", 403);
+        }
+        const owners = await prisma.organizationMember.count({
+          where: { organizationId: orgId, role: "OWNER" },
+        });
+        if (owners <= 1) {
+          throw new AppError("LAST_OWNER", "A organização precisa de ao menos um proprietário.", 400);
+        }
+      }
+    }
 
     await validateOrgReferences(orgId, {
       members: [data.managerId],
@@ -335,27 +351,31 @@ export async function updateCollaborator(input: { id: string } & Record<string, 
       teams: [data.teamId],
     });
 
-await prisma.organizationMember.update({
-       where: { id: member.id },
-       data: {
-         role,
-         jobTitle: data.jobTitle || data.role || member.jobTitle,
-         phone: data.phone != null ? data.phone : member.phone,
-         departmentId: data.departmentId ?? member.departmentId,
-         managerId: data.managerId ?? member.managerId,
-         entryDate: data.entryDate ? new Date(data.entryDate) : member.entryDate,
-       },
-     });
-     await prisma.user.update({
-       where: { id: member.userId },
-       data: { name: data.name.trim() },
-       select: { id: true },
-     });
-    await prisma.teamMember.deleteMany({ where: { memberId: member.id } });
-    if (data.teamId) {
-      await prisma.teamMember.create({
-        data: { teamId: data.teamId, memberId: member.id },
-      });
+    await prisma.organizationMember.update({
+      where: { id: member.id },
+      data: {
+        role,
+        jobTitle: data.jobTitle || data.role || member.jobTitle,
+        phone: data.phone != null ? data.phone : member.phone,
+        departmentId: data.departmentId ?? member.departmentId,
+        managerId: data.managerId ?? member.managerId,
+        entryDate: data.entryDate ? new Date(data.entryDate) : member.entryDate,
+      },
+    });
+    await prisma.user.update({
+      where: { id: member.userId },
+      data: { name: data.name.trim() },
+      select: { id: true },
+    });
+    // Só mexe nas equipes quando o cliente informou teamId de forma explícita
+    // (undefined = não alterar; string/null = trocar/remover).
+    if (data.teamId !== undefined) {
+      await prisma.teamMember.deleteMany({ where: { memberId: member.id } });
+      if (data.teamId) {
+        await prisma.teamMember.create({
+          data: { teamId: data.teamId, memberId: member.id },
+        });
+      }
     }
     await logActivity({
       action: "member.updated",
@@ -371,7 +391,7 @@ await prisma.organizationMember.update({
 
 export async function removeCollaborator(id: string) {
   return handleAction(async () => {
-    const { orgId, session, membership } = await getContext();
+    const { orgId, membership } = await getContext();
     guardPerm(membership, "users.delete");
     const member = await prisma.organizationMember.findFirst({
       where: { id, organizationId: orgId },

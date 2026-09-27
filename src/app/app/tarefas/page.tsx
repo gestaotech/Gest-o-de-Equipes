@@ -85,8 +85,6 @@ export default async function TarefasPage({
         projects={projects}
         teams={teams}
         members={members}
-        selfMemberId={app.membershipId}
-        selfUserId={app.session.sub}
         canWrite={permits(app.org.role, "tasks.write")}
         canDelete={permits(app.org.role, "tasks.delete")}
         openNew={criar === "1"}

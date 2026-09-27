@@ -16,10 +16,12 @@ export function CreateOrgForm() {
   const [state, formAction, pending] = useActionState(
     async (_prev: ActionResult, formData: FormData) => {
       const name = String(formData.get("name") ?? "");
+      const rawSlug = String(formData.get("slug") ?? "").trim();
       const res = (await createOrganization({
         name,
         segment: String(formData.get("segment") ?? "") || undefined,
         size: String(formData.get("size") ?? "") || undefined,
+        ...(rawSlug ? { slug: slugify(rawSlug) } : {}),
       })) as ActionResult;
       if (res.success) {
         toast("Empresa criada!");

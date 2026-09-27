@@ -16,7 +16,6 @@ import {
   passwordChangeSchema,
   userPreferencesSchema,
 } from "@/lib/validations";
-import { Prisma } from "@prisma/client";
 import { logActivity } from "@/server/activity";
 
 const AVATAR_DATA_URL_RE = /^data:image\/(jpeg|png|webp);base64,/;

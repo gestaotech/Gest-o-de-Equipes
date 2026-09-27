@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/button";
 import { 
   Select
-} from "@/components/ui/input"; // Select is also in input.tsx
+} from "@/components/ui/input";
 import { 
   Label
 } from "@/components/ui/label";
@@ -42,8 +42,7 @@ import {
   Loader2
 } from "lucide-react";
 import { formatRelative, formatDate } from "@/lib/utils";
-import { prisma } from "@/lib/prisma";
-import { activityLabel } from "@/lib/queries";
+import { activityLabel } from "@/lib/activity-labels";
 import { toast } from "@/components/ui/toast";
 import { toCsv } from "@/lib/csv";
 
@@ -56,14 +55,19 @@ type ActivityLog = {
   entity: string;
   entityId: string | null;
   userId: string | null;
-  oldData: any;
-  newData: any;
+  oldData: unknown;
+  newData: unknown;
   ipAddress: string | null;
   userAgent: string | null;
-  createdAt: Date;
+  createdAt: string;
   user: {
     name: string | null;
   } | null;
+};
+
+type UserOption = {
+  id: string;
+  name: string;
 };
 
 // Filtros
@@ -88,6 +92,7 @@ const ACTION_FILTERS = [
   { value: "task.updated", label: "Tarefa atualizada" },
   { value: "task.status", label: "Status da tarefa alterado" },
   { value: "task.deleted", label: "Tarefa excluída" },
+  { value: "task.comment", label: "Comentário adicionado" },
   { value: "goal.created", label: "Meta criada" },
   { value: "goal.updated", label: "Meta atualizada" },
   { value: "goal.deleted", label: "Meta excluído" },
@@ -130,13 +135,12 @@ const PERIOD_FILTERS = [
 ];
 
 const ActivityClient = ({
-  orgId,
   canExport
 }: {
-  orgId: string;
   canExport: boolean;
 }) => {
   const [activities, setActivities] = useState<ActivityLog[]>([]);
+  const [users, setUsers] = useState<UserOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 const [filters, setFilters] = useState<{
@@ -161,118 +165,37 @@ const [filters, setFilters] = useState<{
   const [totalCount, setTotalCount] = useState(0);
   const PAGE_SIZE = 20;
 
-  // Calcula a data com base no período selecionado
-  const getDateRange = useCallback((period: string): { from: Date | null; to: Date | null } => {
-    const now = new Date();
-    const to = new Date(now);
-    
-    switch (period) {
-      case "today":
-        return {
-          from: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
-          to: to
-        };
-      case "7d":
-        return {
-          from: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
-          to: to
-        };
-      case "30d":
-        return {
-          from: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
-          to: to
-        };
-      case "90d":
-        return {
-          from: new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000),
-          to: to
-        };
-      case "this_month":
-        return {
-          from: new Date(now.getFullYear(), now.getMonth(), 1),
-          to: to
-        };
-      case "last_month":
-        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
-        return {
-          from: lastMonth,
-          to: endOfLastMonth
-        };
-      case "this_year":
-        return {
-          from: new Date(now.getFullYear(), 0, 1),
-          to: to
-        };
-      default:
-        return { from: null, to: null };
-    }
-  }, []);
-
-  // Busca atividades com base nos filtros
+  // Busca atividades com base nos filtros (dados vêm de /api/activity)
   const fetchActivities = useCallback(async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
-      // Constrói a cláusula WHERE
-      const where: any = { organizationId: orgId };
-      
-      // Filtro de período
-      const { from, to } = getDateRange(filters.period);
-      if (from && to) {
-        where.createdAt = { gte: from, lte: to };
-      } else if (filters.dateFrom && filters.dateTo) {
-        where.createdAt = { gte: filters.dateFrom, lte: filters.dateTo };
-      }
-      
-      // Filtro de usuário
-      if (filters.userId) {
-        where.userId = filters.userId;
-      }
-      
-      // Filtro de ação
-      if (filters.action) {
-        where.action = filters.action;
-      }
-      
-      // Filtro de entidade
-      if (filters.entity) {
-        where.entity = filters.entity;
-      }
-      
-      // Filtro de pesquisa (busca em múltiplos campos)
-      if (filters.search) {
-        const searchTerm = filters.search.toLowerCase();
-        where.OR = [
-          { action: { contains: searchTerm } },
-          { entity: { contains: searchTerm } },
-          { user: { name: { contains: searchTerm } } },
-        ];
-      }
-      
-      // Conta total de registros para paginação
-      const [countResult, dataResult] = await Promise.all([
-        prisma.activityLog.count({ where }),
-        prisma.activityLog.findMany({
-          where,
-          include: { user: { select: { name: true } } },
-          orderBy: { createdAt: "desc" },
-          skip: page * PAGE_SIZE,
-          take: PAGE_SIZE,
-        })
-      ]);
-      
-      setActivities(dataResult);
-      setTotalCount(countResult);
-      setTotalPages(Math.ceil(countResult / PAGE_SIZE));
+      const qs = new URLSearchParams();
+      if (filters.period) qs.set("period", filters.period);
+      if (filters.action) qs.set("action", filters.action);
+      if (filters.entity) qs.set("entity", filters.entity);
+      if (filters.userId) qs.set("userId", filters.userId);
+      if (filters.search) qs.set("search", filters.search);
+      if (filters.dateFrom) qs.set("from", filters.dateFrom.toISOString().slice(0, 10));
+      if (filters.dateTo) qs.set("to", filters.dateTo.toISOString().slice(0, 10));
+      qs.set("page", String(page));
+
+      const res = await fetch(`/api/activity?${qs.toString()}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      setActivities(data.items ?? []);
+      setTotalCount(data.total ?? 0);
+      setTotalPages(data.totalPages ?? 0);
+      if (Array.isArray(data.users)) setUsers(data.users);
     } catch (err) {
       console.error("Erro ao buscar atividades:", err);
       setError("Falha ao carregar atividades. Por favor, tente novamente.");
     } finally {
       setLoading(false);
     }
-  }, [orgId, filters, page, PAGE_SIZE]);
+  }, [filters, page]);
 
   // Efeito para buscar atividades quando os filtros ou página mudarem
   useEffect(() => {
@@ -321,42 +244,29 @@ const handleDateChange = (type: "from" | "to", date: Date | null) => {
   // Formata o user agent para exibição amigável
   const formatUserAgent = (userAgent: string | null): string => {
     if (!userAgent) return "Desconhecido";
-    
-    // Usa a mesma lógica do lib/user-agent.ts
+
     const lower = userAgent.toLowerCase();
-    
+
     let browser = "Navegador";
     if (/edg\//.test(lower)) browser = "Edge";
     else if (/opr\//.test(lower) || /opera/.test(lower)) browser = "Opera";
     else if (/crios\//.test(lower) || /chrome\//.test(lower)) browser = "Chrome";
     else if (/fxios/.test(lower) || /firefox\//.test(lower)) browser = "Firefox";
     else if (/safari\//.test(lower)) browser = "Safari";
-    
+
     let os = "Sistema";
     if (/windows nt/.test(lower)) os = "Windows";
     else if (/android/.test(lower)) os = "Android";
     else if (/iphone|ipad|ios/.test(lower)) os = "iOS";
     else if (/mac os x|macintosh/.test(lower)) os = "macOS";
     else if (/linux/.test(lower)) os = "Linux";
-    
-    let device = "Dispositivo";
-    if (/ipad/.test(lower)) device = "Tablet";
-    else if (/iphone|ipod/.test(lower)) device = "Celular";
-    else if (/android/.test(lower))
-      device = /mobi|mobile/.test(lower) ? "Celular" : "Tablet";
-    else if (/windows|macintosh|mac os|linux|x11/.test(lower)) device = "Computador";
-    
+
     return `${browser} · ${os}`;
   };
 
-  // Formata a data para exibição
-  const formatDateDisplay = (date: Date): string => {
-    return formatDate(date);
-  };
-
   // Formata o tempo relativo
-  const formatTimeAgo = (date: Date): string => {
-    return formatRelative(date);
+  const formatTimeAgo = (value: string): string => {
+    return formatRelative(value);
   };
 
   // Obtém o label amigável para a ação
@@ -365,7 +275,7 @@ const handleDateChange = (type: "from" | "to", date: Date | null) => {
   };
 
   // Obtém o ícone para a ação
-  const getActionIcon = (action: string): any => {
+  const getActionIcon = (action: string): React.ReactNode => {
     if (action.includes("created")) return <Calendar className="h-4 w-4" />;
     if (action.includes("updated") || action.includes("status")) return <Clock className="h-4 w-4" />;
     if (action.includes("deleted") || action.includes("removed")) return <Trash2 className="h-4 w-4" />;
@@ -389,79 +299,45 @@ const handleDateChange = (type: "from" | "to", date: Date | null) => {
       "IP",
       "User Agent"
     ];
-    
+
     const rows = activityLogs.map(log => [
-      formatDate(log.createdAt) + " " + log.createdAt.toTimeString().split(" ")[0],
+      formatDate(log.createdAt) + " " + log.createdAt.slice(11, 19),
       log.user?.name ?? "Sistema",
       getActionLabel(log.action),
       log.entity,
       log.entityId ?? "",
-      log.entityId ? `${log.entity} ${log.action}` : "", // Descrição simplificada
+      log.entityId ? `${log.entity} ${log.action}` : "",
       log.ipAddress ?? "",
       log.userAgent ?? ""
     ]);
-    
+
     return toCsv(headers, rows);
   };
 
-  // Exporta para CSV
+  // Exporta para CSV (busca tudo no servidor, sem paginação)
   const exportToCSV = async () => {
     try {
-      // Busca todas as atividades que correspondem aos filtros atuais (sem paginação)
       setLoading(true);
-      
-      // Constrói a cláusula WHERE mesma da busca paginada
-      const where: any = { organizationId: orgId };
-      
-      // Filtro de período
-      const { from, to } = getDateRange(filters.period);
-      if (from && to) {
-        where.createdAt = { gte: from, lte: to };
-      } else if (filters.dateFrom && filters.dateTo) {
-        where.createdAt = { gte: filters.dateFrom, lte: filters.dateTo };
-      }
-      
-      // Filtro de usuário
-      if (filters.userId) {
-        where.userId = filters.userId;
-      }
-      
-      // Filtro de ação
-      if (filters.action) {
-        where.action = filters.action;
-      }
-      
-      // Filtro de entidade
-      if (filters.entity) {
-        where.entity = filters.entity;
-      }
-      
-      // Filtro de pesquisa (busca em múltiplos campos)
-      if (filters.search) {
-        const searchTerm = filters.search.toLowerCase();
-        where.OR = [
-          { action: { contains: searchTerm } },
-          { entity: { contains: searchTerm } },
-          { user: { name: { contains: searchTerm } } },
-        ];
-      }
-      
-      // Busca todas as atividades correspondentes
-      const allActivities = await prisma.activityLog.findMany({
-        where,
-        include: { user: { select: { name: true } } },
-        orderBy: { createdAt: "desc" }
-      });
-      
-      // Gera o CSV
-      const csvContent = generateActivityCsv(allActivities);
-      
-      // Cria um blob e dispara o download
+
+      const qs = new URLSearchParams();
+      if (filters.period) qs.set("period", filters.period);
+      if (filters.action) qs.set("action", filters.action);
+      if (filters.entity) qs.set("entity", filters.entity);
+      if (filters.userId) qs.set("userId", filters.userId);
+      if (filters.search) qs.set("search", filters.search);
+      if (filters.dateFrom) qs.set("from", filters.dateFrom.toISOString().slice(0, 10));
+      if (filters.dateTo) qs.set("to", filters.dateTo.toISOString().slice(0, 10));
+      qs.set("export", "1");
+
+      const res = await fetch(`/api/activity?${qs.toString()}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      const csvContent = generateActivityCsv(data.items ?? []);
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const fileName = `atividade_${new Date().toISOString().slice(0,10)}.csv`;
-      
-      // Cria um link temporário para download
+
       const link = document.createElement("a");
       link.setAttribute("href", url);
       link.setAttribute("download", fileName);
@@ -469,7 +345,7 @@ const handleDateChange = (type: "from" | "to", date: Date | null) => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
+
       toast(`Exportação concluída: ${fileName}`, "success");
     } catch (err) {
       console.error("Erro ao exportar:", err);
@@ -603,7 +479,9 @@ if (error) {
                      onChange={(e) => handleUserChange(e.target.value)}
                    >
                         <option value="">Todos os usuários</option>
-                        {/* Em uma implementação real, você buscaria a lista de usuários */}
+                        {users.map(u => (
+                          <option key={u.id} value={u.id}>{u.name}</option>
+                        ))}
                       </Select>
                     </div>
                     
@@ -739,13 +617,12 @@ if (error) {
                         )}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {formatDateDisplay(activity.createdAt)}
+                        {formatDate(activity.createdAt)}
                         <div className="text-xs">{formatTimeAgo(activity.createdAt)}</div>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                         {activity.ipAddress ? (
                           <div className="flex items-center gap-1">
-                            {/* Máscara de IP para exibição segura */}
                             {activity.ipAddress
                               .replace(/^::ffff:/, "")
                               .replace(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.)\d{1,3}$/, "$1x")
@@ -773,7 +650,6 @@ if (error) {
             
             <div className="flex items-center justify-between pt-4">
               <div className="flex-1">
-                {/* Simple pagination controls */}
                 <div className="flex items-center gap-2 text-sm">
                   <Button 
                     variant="outline" 

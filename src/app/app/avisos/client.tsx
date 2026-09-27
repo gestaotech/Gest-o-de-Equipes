@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dropdown } from "@/components/ui/dropdown";
 import { formatDate, formatRelative } from "@/lib/utils";
 import { toast } from "@/components/ui/toast";
+import type { ActionResult } from "@/lib/types";
 
 type Announcement = {
   id: string;
@@ -63,12 +64,12 @@ export function AnnouncementsClient({
 
   async function submit() {
     setBusy(true);
-    const res: any = await createAnnouncement({
+    const res = (await createAnnouncement({
       title: form.title,
       message: form.message,
       audience: form.audience,
       audienceId: form.audience === "company" ? null : form.audienceId || null,
-    });
+    })) as ActionResult;
     setBusy(false);
     if (res.success) {
       toast("Aviso publicado.");
@@ -83,7 +84,7 @@ export function AnnouncementsClient({
   async function confirmDelete() {
     if (!deleting) return;
     setBusy(true);
-    const res: any = await deleteAnnouncement(deleting.id);
+    const res = (await deleteAnnouncement(deleting.id)) as ActionResult;
     setBusy(false);
     if (res.success) {
       toast("Aviso removido.");

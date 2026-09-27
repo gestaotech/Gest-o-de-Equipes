@@ -40,6 +40,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { ROLE_LABEL } from "@/lib/rbac";
+import type { ActionResult } from "@/lib/types";
 import {
   DEFAULT_USER_PREFERENCES,
   TIMEZONES,
@@ -225,10 +226,10 @@ function PerfilTab({
       return;
     }
     setSaving(true);
-    const res: any = await updateProfile({
+    const res = (await updateProfile({
       name: form.name.trim(),
       phone: form.phone.trim() ? form.phone.trim() : null,
-    });
+    })) as ActionResult;
     setSaving(false);
     if (res.success) {
       toast("Perfil atualizado.");
@@ -257,7 +258,7 @@ function PerfilTab({
       reader.readAsDataURL(file);
     });
     setAvatarBusy(true);
-    const res: any = await updateAvatar(dataUrl);
+    const res = (await updateAvatar(dataUrl)) as ActionResult;
     setAvatarBusy(false);
     if (res.success) {
       toast("Foto de perfil atualizada.");
@@ -271,7 +272,7 @@ function PerfilTab({
     if (!user.avatarUrl) return;
     if (!window.confirm("Remover a foto de perfil?")) return;
     setAvatarBusy(true);
-    const res: any = await removeAvatar();
+    const res = (await removeAvatar()) as ActionResult;
     setAvatarBusy(false);
     if (res.success) {
       toast("Foto removida.");
@@ -469,11 +470,11 @@ function SegurancaTab({ isOwner }: { isOwner: boolean }) {
       return;
     }
     setPwBusy(true);
-    const res: any = await changePassword({
+    const res = (await changePassword({
       currentPassword: pw.current,
       newPassword: pw.next,
       confirm: pw.confirm,
-    });
+    })) as ActionResult;
     setPwBusy(false);
     if (res.success) {
       toast("Senha alterada. As outras sessões foram encerradas.");
@@ -493,7 +494,7 @@ function SegurancaTab({ isOwner }: { isOwner: boolean }) {
     )
       return;
     setDelBusy(true);
-    const res: any = await deleteAccount({ password: delPassword });
+    const res = (await deleteAccount({ password: delPassword })) as ActionResult;
     setDelBusy(false);
     if (res.success) {
       toast("Conta excluída.");
@@ -513,7 +514,7 @@ function SegurancaTab({ isOwner }: { isOwner: boolean }) {
             <CardTitle>Alterar senha</CardTitle>
           </div>
           <CardDescription>
-            Ao alterar, as outras sessões são encerradas. Mínimo de 8
+            Ao alterar, as outras sessões são encerradas. Mínimo de 6
             caracteres.
           </CardDescription>
         </CardHeader>
@@ -653,7 +654,7 @@ function PreferenciasTab({
 
   async function save() {
     setBusy(true);
-    const res: any = await updatePreferences(prefs);
+    const res = (await updatePreferences(prefs)) as ActionResult;
     setBusy(false);
     if (res.success) {
       toast("Preferências salvas.");
@@ -810,7 +811,7 @@ function SessoesTab({ sessions }: { sessions: SessionRow[] }) {
   async function revokeOne(row: SessionRow) {
     if (!window.confirm("Encerrar esta sessão?")) return;
     setBusyId(row.id);
-    const res: any = await revokeSession(row.id);
+    const res = (await revokeSession(row.id)) as ActionResult;
     setBusyId(null);
     if (res.success) {
       toast("Sessão encerrada.");
@@ -830,11 +831,11 @@ function SessoesTab({ sessions }: { sessions: SessionRow[] }) {
     )
       return;
     setOthersBusy(true);
-    const res: any = await revokeOtherSessions();
+    const res = await revokeOtherSessions();
     setOthersBusy(false);
     if (res.success) {
       toast(
-        res.data?.revoked
+        res.data.revoked > 0
           ? `${res.data.revoked} sessão(ões) encerrada(s).`
           : "Nenhuma outra sessão ativa."
       );

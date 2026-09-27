@@ -8,6 +8,7 @@ import { Input, Select } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "@/components/ui/toast";
+import type { ActionResult } from "@/lib/types";
 import {
   Rocket,
   Building2,
@@ -61,10 +62,10 @@ export function OnboardingWizard({ companyName }: { companyName: string }) {
 
   async function finish() {
     setLoading(true);
-    const res: any = await saveOnboarding({
+    const res = (await saveOnboarding({
       ...state,
       step: STEPS.length - 1,
-    });
+    })) as ActionResult;
     setLoading(false);
     if (res.success) {
       toast("Configuração concluída!");
@@ -249,7 +250,7 @@ export function OnboardingWizard({ companyName }: { companyName: string }) {
             </span>
             <button
               type="button"
-              onClick={() => setStep((s) => s + 1)}
+              onClick={() => setStep((s) => Math.min(STEPS.length - 1, s + 1))}
               className="font-medium text-blue-600 hover:underline"
             >
               Pular
