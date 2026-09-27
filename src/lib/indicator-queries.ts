@@ -191,6 +191,50 @@ export async function getTaskEvolution(
 }
 
 // ------------------------------------------------------------
+// EVOLUÇÃO DAS TAREFAS CRIADAS × CONCLUÍDAS (dashboard)
+// ------------------------------------------------------------
+
+export type FlowPoint = { bucket: string; created: number; completed: number };
+
+export async function getTaskFlowEvolution(
+  scope: IndicatorScope,
+  granularity: EvolutionGranularity,
+  range: DateRange | null
+): Promise<FlowPoint[]> {
+  if (!range?.from) return [];
+  const conditions = taskSqlConditions(scope, range, "tk");
+  const whereSql = Prisma.join(conditions, " AND ");
+  const [createdRows, completedRows] = await Promise.all([
+    prisma.$queryRaw<{ bucket: Date; total: number }[]>`
+      SELECT ${bucketExpr(granularity)} AS bucket, count(*)::int AS total
+      FROM tasks tk
+      WHERE ${whereSql}
+      GROUP BY bucket
+      ORDER BY bucket ASC
+    `,
+    prisma.$queryRaw<{ bucket: Date; total: number }[]>`
+      SELECT ${bucketExpr(granularity)} AS bucket, count(*)::int AS total
+      FROM tasks tk
+      WHERE ${whereSql} AND tk."completedAt" IS NOT NULL AND tk."completedAt" >= ${range.from}
+      GROUP BY bucket
+      ORDER BY bucket ASC
+    `,
+  ]);
+  const byBucket = new Map<string, FlowPoint>();
+  for (const r of createdRows) {
+    const key = r.bucket.toISOString().slice(0, 10);
+    const prev = byBucket.get(key);
+    byBucket.set(key, { bucket: key, created: Number(r.total), completed: prev?.completed ?? 0 });
+  }
+  for (const r of completedRows) {
+    const key = r.bucket.toISOString().slice(0, 10);
+    const prev = byBucket.get(key);
+    byBucket.set(key, { bucket: key, created: prev?.created ?? 0, completed: Number(r.total) });
+  }
+  return [...byBucket.values()].sort((a, b) => a.bucket.localeCompare(b.bucket));
+}
+
+// ------------------------------------------------------------
 // RESULTADOS POR EQUIPE (métricas objetivas, ordenadas pelo usuário)
 // ------------------------------------------------------------
 
