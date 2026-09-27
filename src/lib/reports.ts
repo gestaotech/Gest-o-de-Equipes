@@ -1,3 +1,4 @@
+import "server-only";
 import { prisma } from "@/lib/prisma";
 import { toCsv } from "@/lib/csv";
 import { formatDate } from "@/lib/utils";

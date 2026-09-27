@@ -1,3 +1,4 @@
+import "server-only";
 import { redirect } from "next/navigation";
 import { getSession, getActiveOrg } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";

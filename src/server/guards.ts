@@ -1,3 +1,4 @@
+import "server-only";
 import { prisma } from "@/lib/prisma";
 import { requireSessionApi, getActiveOrg } from "@/lib/auth";
 import { AppError } from "@/lib/errors";

@@ -95,35 +95,42 @@ export async function GET(req: NextRequest) {
     ];
   }
 
-  const [countResult, items] = await Promise.all([
-    prisma.activityLog.count({ where }),
-    prisma.activityLog.findMany({
-      where,
-      include: { user: { select: { name: true } } },
-      orderBy: { createdAt: "desc" },
-      ...(isExport ? {} : { skip: page * PAGE_SIZE, take: PAGE_SIZE }),
-    }),
-  ]);
+  try {
+    const [countResult, items] = await Promise.all([
+      prisma.activityLog.count({ where }),
+      prisma.activityLog.findMany({
+        where,
+        include: { user: { select: { name: true } } },
+        orderBy: { createdAt: "desc" },
+        ...(isExport ? {} : { skip: page * PAGE_SIZE, take: PAGE_SIZE }),
+      }),
+    ]);
 
-  const enriched = items.map((log) => ({
-    ...log,
-    ipAddress: maskIp(log.ipAddress),
-    createdAt: log.createdAt.toISOString(),
-  }));
+    const enriched = items.map((log) => ({
+      ...log,
+      ipAddress: maskIp(log.ipAddress),
+      createdAt: log.createdAt.toISOString(),
+    }));
 
-  // Lista de usuários para o filtro da tela.
-  const memberships = await prisma.organizationMember.findMany({
-    where: { organizationId: org.id },
-    select: { userId: true, user: { select: { name: true } } },
-    orderBy: { joinedAt: "asc" },
-  });
-  const users = memberships.map((m) => ({ id: m.userId, name: m.user.name }));
+    // Lista de usuários para o filtro da tela.
+    const memberships = await prisma.organizationMember.findMany({
+      where: { organizationId: org.id },
+      select: { userId: true, user: { select: { name: true } } },
+      orderBy: { joinedAt: "asc" },
+    });
+    const users = memberships.map((m) => ({ id: m.userId, name: m.user.name }));
 
-  return NextResponse.json({
-    items: enriched,
-    total: isExport ? items.length : countResult,
-    totalPages: isExport ? 1 : Math.max(1, Math.ceil(countResult / PAGE_SIZE)),
-    page,
-    users,
-  });
+    return NextResponse.json({
+      items: enriched,
+      total: isExport ? items.length : countResult,
+      totalPages: isExport ? 1 : Math.max(1, Math.ceil(countResult / PAGE_SIZE)),
+      page,
+      users,
+    });
+  } catch {
+    return NextResponse.json(
+      { error: "Não foi possível carregar as atividades. Tente novamente." },
+      { status: 500 }
+    );
+  }
 }
