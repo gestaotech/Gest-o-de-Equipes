@@ -13,7 +13,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
 import { AppShell } from "@/components/app-shell/app-shell";
-import { activityLabel } from "@/lib/queries";
+import { activityLabel } from "@/lib/activity-labels";
 import { ROLE_LABEL } from "@/lib/rbac";
 import { formatDate, formatRelative, isPastDue, cn } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";

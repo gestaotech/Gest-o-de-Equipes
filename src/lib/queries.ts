@@ -1,7 +1,5 @@
 import { prisma } from "@/lib/prisma";
 
-export { activityLabel } from "@/lib/activity-labels";
-
 export async function getOrgStats(orgId: string) {
   const [
     members,
