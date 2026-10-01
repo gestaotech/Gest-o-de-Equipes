@@ -4,6 +4,7 @@ import "server-only";
 
 import { prisma } from "@/lib/prisma";
 import { v4 as uuidv4 } from "uuid";
+import crypto from "crypto";
 
 import {
   api as asaasApi,
@@ -313,8 +314,7 @@ export async function handleWebhook(
   webhookToken: string
 ): Promise<void> {
   // Verify webhook signature
-  const crypto = require("crypto");
-  const hmac = crypto.createHmac("sha256", webhookToken);
+const hmac = crypto.createHmac("sha256", webhookToken);
   hmac.update(event.payload);
   const computedSignature = hmac.digest("hex");
 
