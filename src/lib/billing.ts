@@ -135,10 +135,26 @@ export async function createSubscription({
     throw new Error(`Plan ${planId} not found`);
   }
 
+  // Determine trial days based on plan tier
+  // PlanTier order: STARTER=0, PROFESSIONAL=1, BUSINESS=2, ENTERPRISE=3
+  const trialDaysMap: Record<string, number> = {
+    STARTER: 14, // 14-day trial for STARTER plan
+    PROFESSIONAL: 0, // No trial for PROFESSIONAL - must subscribe immediately
+    BUSINESS: 30, // 30-day trial for BUSINESS (optional)
+    ENTERPRISE: 60, // 60-day trial for ENTERPRISE (optional)
+  };
+
+  const trialDays = trialDaysMap[plan.tier] || 0;
+
   // Value in centavos
   const valueInCents = Math.round(
     cycle === "MONTHLY" ? plan.priceMonthly * 100 : plan.priceYearly * 100
   );
+
+  // Calculate trial end date
+  const trialEndsAt = trialDays > 0
+    ? new Date(Date.now() + trialDays * 86400000)
+    : undefined;
 
   // Create subscription in Asaas
   const asaasData: AsaasCreateSubscriptionInput = {
@@ -160,13 +176,15 @@ export async function createSubscription({
     where: { organizationId },
     update: {
       planId,
-      status: "ACTIVE" as const,
+      status: trialDays > 0 ? "TRIALING" : "ACTIVE" as const,
       currentPeriodStart: new Date(),
       currentPeriodEnd:
         cycle === "MONTHLY"
           ? new Date(Date.now() + 30 * 86400000)
           : new Date(Date.now() + 365 * 86400000),
       cancelAtPeriodEnd: false,
+      trialDays,
+      trialEndsAt,
       provider: "ASAAS",
       providerCustomerId: customerData.asaasCustomerId,
       providerSubscriptionId: result.id,
@@ -174,13 +192,15 @@ export async function createSubscription({
     create: {
       organizationId,
       planId,
-      status: "ACTIVE" as const,
+      status: trialDays > 0 ? "TRIALING" : "ACTIVE" as const,
       currentPeriodStart: new Date(),
       currentPeriodEnd:
         cycle === "MONTHLY"
           ? new Date(Date.now() + 30 * 86400000)
           : new Date(Date.now() + 365 * 86400000),
       cancelAtPeriodEnd: false,
+      trialDays,
+      trialEndsAt,
       provider: "ASAAS",
       providerCustomerId: customerData.asaasCustomerId,
       providerSubscriptionId: result.id,
@@ -200,7 +220,7 @@ export async function updateSubscription({
   cycle,
 }: {
   subscriptionId: string;
-  status?: string;
+  status?: "ACTIVE" | "TRIALING" | "PAST_DUE" | "CANCELED" | "REFUNDED";
   cycle?: "MONTHLY" | "YEARLY";
 }): Promise<Subscription> {
   // Update in Asaas
@@ -215,10 +235,12 @@ export async function updateSubscription({
   }
 
   // Update local
-  const updateData = {
-    ...(status && { status }),
-    ...(cycle && { cycle }),
-  };
+  const updateData: {
+    status?: "ACTIVE" | "TRIALING" | "PAST_DUE" | "CANCELED" | "REFUNDED";
+    cycle?: "MONTHLY" | "YEARLY";
+  } = {};
+  if (status) updateData.status = status;
+  if (cycle) updateData.cycle = cycle;
 
   const updated = await prisma.subscription.update({
     where: { id: subscriptionId },
