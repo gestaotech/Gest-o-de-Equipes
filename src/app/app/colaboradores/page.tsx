@@ -2,14 +2,39 @@ import type { Metadata } from "next";
 import { getAppShellData } from "@/server/page-data";
 import { getOrgMembers } from "@/server/guards";
 import { prisma } from "@/lib/prisma";
-import { permits } from "@/lib/rbac";
+import { permits, RoleName } from "@/lib/rbac";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { TeammatesClient } from "./client";
 
 export const metadata: Metadata = { title: "Colaboradores" };
 
+function getAllowedRoles(userRole: RoleName): { label: string; value: string }[] {
+  // OWNER: pode qualquer role
+  if (userRole === "OWNER") {
+    return [
+      { label: "Proprietário", value: "OWNER" },
+      { label: "Administrador", value: "ADMIN" },
+      { label: "Gerente", value: "MANAGER" },
+      { label: "Líder", value: "LEADER" },
+      { label: "Membro", value: "MEMBER" },
+    ];
+  }
+  // MANAGER: pode qualquer exceto OWNER
+  if (userRole === "MANAGER") {
+    return [
+      { label: "Administrador", value: "ADMIN" },
+      { label: "Gerente", value: "MANAGER" },
+      { label: "Líder", value: "LEADER" },
+      { label: "Membro", value: "MEMBER" },
+    ];
+  }
+  // LEADER e MEMBER: ninguém
+  return [];
+}
+
 export default async function ColaboradoresPage() {
   const app = await getAppShellData();
+  const allowedRoles = getAllowedRoles(app.org.role);
   const [members, teams, departments, managers] = await Promise.all([
     getOrgMembers(app.org.id),
     prisma.team.findMany({
@@ -53,6 +78,7 @@ export default async function ColaboradoresPage() {
         selfMemberId={app.membershipId}
         canWrite={permits(app.org.role, "users.write")}
         canDelete={permits(app.org.role, "users.delete")}
+        allowedRoles={allowedRoles}
         teams={teams}
         departments={departments}
         managers={managers}

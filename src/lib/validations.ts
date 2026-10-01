@@ -127,15 +127,36 @@ export const teamSchema = z.object({
 
 export const collaboratorSchema = z.object({
   name: z.string().min(2, "Informe o nome.").max(80).trim(),
+  cpf: z
+    .string()
+    .regex(/^\d{3}\.\d{3}\.\d{3}-\d{2}$/, "CPF inválido.")
+    .refine((cpf) => {
+      // Validação simples de CPF (todos dígitos iguais rejeitados)
+      const cleaned = cpf.replace(/\D/g, "");
+      if (/^(\d)\1+$/.test(cleaned)) return false;
+      // Cálculo dos dígitos verificadores
+      let sum = 0;
+      for (let i = 0; i < 9; i++) sum += parseInt(cleaned.charAt(i)) * (10 - i);
+      const remainder = sum % 11;
+      const digit1 = remainder < 2 ? 0 : 11 - remainder;
+      if (parseInt(cleaned.charAt(9)) !== digit1) return false;
+      sum = 0;
+      for (let i = 0; i < 10; i++) sum += parseInt(cleaned.charAt(i)) * (11 - i);
+      const remainder2 = sum % 11;
+      const digit2 = remainder2 < 2 ? 0 : 11 - remainder2;
+      return parseInt(cleaned.charAt(10)) === digit2;
+    }, "CPF inválido."),
   email: z.string().email("E-mail inválido.").max(160).or(z.literal("")),
-  role: z.string().min(0).max(60).optional(),
   jobTitle: z.string().max(80).optional(),
-  phone: z.string().max(30).optional(),
+  permission: z.string().optional(), // OWNER|ADMIN|MANAGER|LEADER|MEMBER
   departmentId: z.string().optional().nullable(),
   teamId: z.string().optional().nullable(),
   managerId: z.string().optional().nullable(),
   entryDate: z.string().optional().nullable(),
-  permission: z.string().optional(), // OWNER|ADMIN|MANAGER|LEADER|MEMBER
+  phone: z
+    .string()
+    .regex(/^[0-9+\-\s()]{8,20}$/, "Telefone inválido.")
+    .optional(),
 });
 
 export const projectSchema = z.object({

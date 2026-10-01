@@ -13,6 +13,10 @@ import {
   guardPerm,
   guardCanAssign,
   validateOrgReferences,
+  canCreateMember,
+  canChangeMemberRole,
+  guardLastOwnerProtection,
+  guardManagerCannotPromoteToOwner,
 } from "@/server/guards";
 import { logActivity } from "@/server/activity";
 import { hashPassword } from "@/lib/auth";
@@ -205,6 +209,21 @@ export async function addCollaborator(input: unknown) {
     const data = collaboratorSchema.parse(input);
     const email = data.email ? normalizeEmail(data.email) : null;
 
+    // Verificação hierárquica: quem pode criar qual role
+    const role = (
+      data.permission && ["OWNER", "ADMIN", "MANAGER", "LEADER", "MEMBER"].includes(data.permission)
+        ? data.permission
+        : "MEMBER"
+    ) as "OWNER" | "ADMIN" | "MANAGER" | "LEADER" | "MEMBER";
+
+    // Impede MANAGER de promover para OWNER
+    guardManagerCannotPromoteToOwner(membership);
+
+    // Verifica se o ator pode criar um membro com este role
+    if (!canCreateMember(membership, role)) {
+      throw new AppError("FORBIDDEN", "Você não pode cadastrar colaboradores com este cargo.", 403);
+    }
+
     let userId: string;
     let createdUser = false;
 
@@ -245,25 +264,26 @@ export async function addCollaborator(input: unknown) {
       createdUser = true;
     }
 
-    const role = (
-      data.permission && ["OWNER", "ADMIN", "MANAGER", "LEADER", "MEMBER"].includes(data.permission)
-        ? data.permission
-        : "MEMBER"
-    ) as "OWNER" | "ADMIN" | "MANAGER" | "LEADER" | "MEMBER";
-    guardCanAssign(membership, role);
-
+    // Valida referências de organização
     await validateOrgReferences(orgId, {
       members: [data.managerId],
       departments: [data.departmentId],
       teams: [data.teamId],
     });
 
+    // Contagem de OWNERs para proteção do último
+    const ownersCount = await prisma.organizationMember.count({
+      where: { organizationId: orgId, role: "OWNER" },
+    });
+    guardLastOwnerProtection(membership, { owners: ownersCount });
+
     const member = await prisma.organizationMember.create({
       data: {
         organizationId: orgId,
         userId,
         role,
-        jobTitle: data.jobTitle || data.role || null,
+        jobTitle: data.jobTitle || role || null,
+        cpf: data.cpf || null,
         phone: data.phone || null,
         departmentId: data.departmentId || null,
         managerId: data.managerId || null,
@@ -285,6 +305,7 @@ export async function addCollaborator(input: unknown) {
         name: data.name,
         role,
         created: createdUser ? "user+member" : "member",
+        cpf: data.cpf ? "normalized" : null,
       },
     });
     return { id: member.id, createdUser };
@@ -327,6 +348,15 @@ export async function updateCollaborator(input: { id: string } & Record<string, 
         ? data.permission
         : member.role
     ) as "OWNER" | "ADMIN" | "MANAGER" | "LEADER" | "MEMBER";
+
+    // Impede MANAGER de promover para OWNER
+    guardManagerCannotPromoteToOwner(membership);
+
+    // Verifica se o ator pode mudar o papel para o target
+    if (data.permission && !canChangeMemberRole(membership, role)) {
+      throw new AppError("FORBIDDEN", "Você não pode alterar o papel deste colaborador.", 403);
+    }
+
     if (data.permission) {
       guardCanAssign(membership, role);
       if (member.userId === session.sub && role !== member.role) {
@@ -345,6 +375,12 @@ export async function updateCollaborator(input: { id: string } & Record<string, 
       }
     }
 
+    // Contagem de OWNERs para proteção do último
+    const ownersCount = await prisma.organizationMember.count({
+      where: { organizationId: orgId, role: "OWNER" },
+    });
+    guardLastOwnerProtection(membership, { owners: ownersCount });
+
     await validateOrgReferences(orgId, {
       members: [data.managerId],
       departments: [data.departmentId],
@@ -355,7 +391,8 @@ export async function updateCollaborator(input: { id: string } & Record<string, 
       where: { id: member.id },
       data: {
         role,
-        jobTitle: data.jobTitle || data.role || member.jobTitle,
+        jobTitle: data.jobTitle || role || member.jobTitle,
+        cpf: data.cpf || member.cpf,
         phone: data.phone != null ? data.phone : member.phone,
         departmentId: data.departmentId ?? member.departmentId,
         managerId: data.managerId ?? member.managerId,
@@ -444,6 +481,12 @@ export async function setMemberRole(input: { id: string; role: string }) {
     if (member.userId === session.sub && role !== member.role) {
       throw new AppError("SELF_ROLE", "Altere seu próprio papel pela edição de perfil (apenas por um administrador).", 400);
     }
+    // Impede MANAGER de promover para OWNER
+    guardManagerCannotPromoteToOwner(membership);
+    // Verifica se o ator pode mudar o papel para o target
+    if (!canChangeMemberRole(membership, role)) {
+      throw new AppError("FORBIDDEN", "Você não pode alterar o papel deste colaborador.", 403);
+    }
     guardCanAssign(membership, role);
     if (member.role === "OWNER" && role !== "OWNER") {
       if (membership.role !== "OWNER") {
@@ -457,9 +500,9 @@ export async function setMemberRole(input: { id: string; role: string }) {
       }
     }
 await prisma.organizationMember.update({
-       where: { id: member.id },
-       data: { role },
-     });
+   where: { id: member.id },
+   data: { role },
+ });
     await logActivity({
       action: "member.role",
       entity: "member",

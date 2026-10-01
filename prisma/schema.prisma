@@ -76,6 +76,7 @@ enum SubscriptionStatus {
   ACTIVE
   PAST_DUE
   CANCELED
+  REFUNDED
 }
 
 // ------------------------------------------------------------
@@ -188,6 +189,7 @@ model OrganizationMember {
   role         RoleName     @default(MEMBER)
   status       MemberStatus @default(ATIVO)
   jobTitle     String?
+  cpf          String?      // CAMPO ADD: CPF do colaborador
   phone        String?
   departmentId String?
   managerId    String?
@@ -693,7 +695,7 @@ model Plan {
 
 model Subscription {
   id                 String             @id @default(cuid())
-  organizationId     String
+  organizationId     String  @unique
   planId             String
   status             SubscriptionStatus @default(TRIALING)
   currentPeriodStart DateTime?
@@ -702,17 +704,20 @@ model Subscription {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
+  provider           String             @default("ASAAS")
+  providerCustomerId String?            @map("provider_customer_id")
+  providerSubscriptionId String?       @map("provider_subscription_id")
+
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   plan         Plan         @relation(fields: [planId], references: [id], onDelete: Restrict)
   invoices     Invoice[]
 
   @@index([organizationId])
-  @@map("subscriptions")
 }
 
 model Invoice {
   id             String          @id @default(cuid())
-  subscriptionId String
+  subscriptionId String  @unique
   amount         Float
   currency       String          @default("BRL")
   status         String          @default("PENDENTE")

@@ -1,5 +1,7 @@
 import type { RoleName } from "@prisma/client";
 
+export type { RoleName };
+
 export const ROLE_ORDER: Record<RoleName, number> = {
   OWNER: 5,
   ADMIN: 4,

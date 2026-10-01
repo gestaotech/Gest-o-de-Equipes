@@ -63,23 +63,27 @@ const empty: Form = {
   entryDate: "",
 };
 
+type Props = {
+  members: Member[];
+  selfMemberId: string;
+  canWrite: boolean;
+  canDelete: boolean;
+  allowedRoles: { label: string; value: string }[];
+  teams: Sel[];
+  departments: Sel[];
+  managers: { id: string; user: { name: string } }[];
+};
+
 export function TeammatesClient({
   members,
   selfMemberId,
   canWrite,
   canDelete,
+  allowedRoles,
   teams,
   departments,
   managers,
-}: {
-  members: Member[];
-  selfMemberId: string;
-  canWrite: boolean;
-  canDelete: boolean;
-  teams: Sel[];
-  departments: Sel[];
-  managers: { id: string; user: { name: string } }[];
-}) {
+}: Props) {
   const router = useRouter();
   const [dialog, setDialog] = useState<{ mode: "add" | "edit"; form: Form; id?: string } | null>(null);
   const [deleting, setDeleting] = useState<Member | null>(null);
@@ -148,14 +152,6 @@ export function TeammatesClient({
 
   const set = (patch: Partial<Form>) =>
     setDialog((d) => (d ? { ...d, form: { ...d.form, ...patch } } : d));
-
-  const options: { label: string; value: string }[] = [
-    { label: "Membro", value: "MEMBER" },
-    { label: "Líder", value: "LEADER" },
-    { label: "Gerente", value: "MANAGER" },
-    { label: "Administrador", value: "ADMIN" },
-    { label: "Proprietário", value: "OWNER" },
-  ];
 
   return (
     <div className="space-y-5">
@@ -294,7 +290,7 @@ export function TeammatesClient({
           <div>
             <Label>Permissão</Label>
             <Select value={dialog?.form.permission} onChange={(e) => set({ permission: e.target.value })}>
-              {options.map((o) => (
+              {allowedRoles.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </Select>

@@ -117,6 +117,75 @@ export async function validateOrgReferences(
   }
 }
 
+/** Verifica se o ator pode criar um membro com o papel informado. */
+export function canCreateMember(actorMembership: OrganizationMember, targetRole: RoleName): boolean {
+  const actorRole = actorMembership.role;
+  // OWNER pode criar qualquer um
+  if (actorRole === "OWNER") return true;
+  // MANAGER pode criar exceto OWNER
+  if (actorRole === "MANAGER") return targetRole !== "OWNER";
+  // LEADER e MEMBER não podem criar ninguém
+  return false;
+}
+
+/** Verifica se o ator pode alterar o papel de um membro. */
+export function canChangeMemberRole(actorMembership: OrganizationMember, targetRole: RoleName): boolean {
+  const actorRole = actorMembership.role;
+  // OWNER pode mudar qualquer um para qualquer role
+  if (actorRole === "OWNER") return true;
+  // MANAGER pode mudar exceto para OWNER
+  if (actorRole === "MANAGER") return targetRole !== "OWNER";
+  // LEADER e MEMBER não podem mudar role
+  return false;
+}
+
+/** Verifica se o ator pode desativar um membro. */
+export function canDeactivateMember(actorMembership: OrganizationMember, targetMembership: OrganizationMember): boolean {
+  const actorRole = actorMembership.role;
+  const targetRole = targetMembership.role;
+  // OWNER pode desativar qualquer um
+  if (actorRole === "OWNER") return true;
+  // MANAGER pode desativar exceto OWNER
+  if (actorRole === "MANAGER") return targetRole !== "OWNER";
+  // LEADER e MEMBER não podem desativar
+  return false;
+}
+
+/** Verifica se o ator pode remover um membro. */
+export function canRemoveMember(actorMembership: OrganizationMember, targetMembership: OrganizationMember): boolean {
+  const actorRole = actorMembership.role;
+  const targetRole = targetMembership.role;
+  // OWNER pode remover qualquer um
+  if (actorRole === "OWNER") return true;
+  // MANAGER pode remover exceto OWNER
+  if (actorRole === "MANAGER") return targetRole !== "OWNER";
+  // LEADER e MEMBER não podem remover
+  return false;
+}
+
+/** Verifica se pode remover o último OWNER (validated no servidor). */
+export function canRemoveLastOwner(actorMembership: OrganizationMember, orgMemberCount: { owners: number }): boolean {
+  if (actorMembership.role !== "OWNER") return false;
+  return orgMemberCount.owners > 1;
+}
+
+/** Impede que o último OWNER seja removido ou rebaixado. */
+export function guardLastOwnerProtection(
+  membership: OrganizationMember,
+  orgMemberCount: { owners: number }
+): void {
+  if (membership.role === "OWNER" && orgMemberCount.owners <= 1) {
+    throw new AppError("LAST_OWNER", "A organização precisa de ao menos um proprietário.", 403);
+  }
+}
+
+/** Impede promoção para OWNER por MANAGER. */
+export function guardManagerCannotPromoteToOwner(membership: OrganizationMember): void {
+  if (membership.role === "MANAGER") {
+    throw new AppError("FORBIDDEN", "Gerentes não podem cadastrar ou promover proprietários.", 403);
+  }
+}
+
 export async function getOrgMembers(orgId: string) {
   return prisma.organizationMember.findMany({
     where: { organizationId: orgId },
