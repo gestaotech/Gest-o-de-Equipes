@@ -104,7 +104,7 @@ export function AppShell({
     await logout();
     toast("Até logo!");
     setTimeout(() => {
-      router.push("/login");
+      router.push("/");
       router.refresh();
     }, 150);
   }
