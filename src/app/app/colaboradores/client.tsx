@@ -18,14 +18,13 @@ import { toast } from "@/components/ui/toast";
 import { formatDate } from "@/lib/utils";
 import type { ActionResult } from "@/lib/types";
 import { ROLE_LABEL } from "@/lib/rbac";
-import type { RoleName } from "@prisma/client";
 
 type Member = {
   id: string;
   userId: string;
   name: string;
   email: string;
-  role: RoleName;
+  role: string;
   status: string;
   jobTitle: string | null;
   phone: string | null;
@@ -221,7 +220,7 @@ export function TeammatesClient({
                   </TableCell>
                   <TableCell className="text-muted-foreground">{m.managerName ?? "—"}</TableCell>
                   <TableCell>
-                    <Badge>{ROLE_LABEL[m.role]}</Badge>
+                    <Badge>{ROLE_LABEL[m.role as keyof typeof ROLE_LABEL]}</Badge>
                   </TableCell>
                   <TableCell className="text-muted-foreground">{formatDate(m.entryDate)}</TableCell>
                   <TableCell>
