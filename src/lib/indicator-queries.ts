@@ -206,10 +206,19 @@ function taskVisibilitySql(s: DataScope, alias: string): Prisma.Sql | null {
   return Prisma.sql`(${Prisma.join(rel, " OR ")})`;
 }
 
-function taskSqlConditions(
+/**
+ * Coluna temporal usada para o filtro de período e o agrupamento.
+ * "createdAt" para tarefas criadas, "completedAt" para tarefas concluídas.
+ * São conceitos distintos e NÃO devem ser misturados.
+ */
+type TaskDateColumn = "createdAt" | "completedAt";
+
+/** Condições SQL de tarefa. `dateColumn` define a coluna do filtro de período. */
+export function taskSqlConditions(
   scope: IndicatorScope,
   range: DateRange | null,
-  alias: string
+  alias: string,
+  dateColumn: TaskDateColumn = "createdAt"
 ): Prisma.Sql[] {
   const t = Prisma.raw(alias);
   const c: Prisma.Sql[] = [Prisma.sql`${t}."organizationId" = ${scope.orgId}`];
@@ -217,13 +226,17 @@ function taskSqlConditions(
     const vis = taskVisibilitySql(scope.restrict, alias);
     if (vis) c.push(vis);
   }
+  // O período incide sobre a coluna pedida: uma tarefa concluída dentro da
+  // janela entra na série de concluídas mesmo que tenha sido criada antes.
   if (range?.from) {
+    const col = Prisma.raw(`"${dateColumn}"`);
     c.push(
       range.to
-        ? Prisma.sql`${t}."createdAt" >= ${range.from} AND ${t}."createdAt" < ${range.to}`
-        : Prisma.sql`${t}."createdAt" >= ${range.from}`
+        ? Prisma.sql`${t}.${col} >= ${range.from} AND ${t}.${col} < ${range.to}`
+        : Prisma.sql`${t}.${col} >= ${range.from}`
     );
   }
+  if (dateColumn === "completedAt") c.push(Prisma.sql`${t}."completedAt" IS NOT NULL`);
   if (scope.projectId) c.push(Prisma.sql`${t}."projectId" = ${scope.projectId}`);
   if (scope.teamId) c.push(Prisma.sql`${t}."teamId" = ${scope.teamId}`);
   if (scope.status) c.push(Prisma.sql`${t}."status" = ${scope.status}`);
@@ -241,33 +254,40 @@ function taskSqlConditions(
   return c;
 }
 
-function bucketExpr(g: EvolutionGranularity): Prisma.Sql {
-  if (g === "week") return Prisma.sql`date_trunc('week', tk."completedAt")`;
-  if (g === "month") return Prisma.sql`date_trunc('month', tk."completedAt")`;
-  return Prisma.sql`date_trunc('day', tk."completedAt")`;
+/**
+ * Bucket do eixo temporal, truncado sobre a coluna pedida.
+ * O truncamento roda em UTC e o texto resultante é gerado no próprio SQL,
+ * evitando que a conversão para o fuso do servidor desloque o dia/bucket.
+ */
+export function bucketExpr(
+  g: EvolutionGranularity,
+  dateColumn: TaskDateColumn = "completedAt"
+): Prisma.Sql {
+  const unit = g === "week" ? "week" : g === "month" ? "month" : "day";
+  const col = Prisma.raw(`"${dateColumn}"`);
+  return Prisma.sql`to_char(date_trunc('${Prisma.raw(unit)}', tk.${col} AT TIME ZONE 'UTC'), 'YYYY-MM-DD')`;
 }
 
+/**
+ * Evolução de tarefas CONCLUÍDAS. O período e o bucket usam `completedAt`.
+ * Tarefas concluídas dentro da janela entram mesmo se criadas antes dela.
+ */
 export async function getTaskEvolution(
   scope: IndicatorScope,
   granularity: EvolutionGranularity,
   range: DateRange | null
 ): Promise<{ bucket: string; total: number }[]> {
   if (!range?.from) return [];
-  const conditions = taskSqlConditions(scope, range, "tk");
+  const conditions = taskSqlConditions(scope, range, "tk", "completedAt");
   const whereSql = Prisma.join(conditions, " AND ");
-  const rows = await prisma.$queryRaw<
-    { bucket: Date; total: number }[]
-  >`
-    SELECT ${bucketExpr(granularity)} AS bucket, count(*)::int AS total
+  const rows = await prisma.$queryRaw<{ bucket: string; total: number }[]>`
+    SELECT ${bucketExpr(granularity, "completedAt")} AS bucket, count(*)::int AS total
     FROM tasks tk
-    WHERE ${whereSql} AND tk."completedAt" IS NOT NULL AND tk."completedAt" >= ${range.from}
+    WHERE ${whereSql}
     GROUP BY bucket
     ORDER BY bucket ASC
   `;
-  return rows.map((r) => ({
-    bucket: r.bucket.toISOString().slice(0, 10),
-    total: Number(r.total),
-  }));
+  return rows.map((r) => ({ bucket: r.bucket, total: Number(r.total) }));
 }
 
 // ------------------------------------------------------------
@@ -276,41 +296,54 @@ export async function getTaskEvolution(
 
 export type FlowPoint = { bucket: string; created: number; completed: number };
 
+/**
+ * Evolução de tarefas CRIADAS × CONCLUÍDAS.
+ *
+ * Séries independentes, cada uma com sua própria coluna temporal:
+ *   criadas    → createdAt   (sem exigir completedAt)
+ *   concluídas → completedAt (exige completedAt IS NOT NULL)
+ *
+ * Uma tarefa criada dentro da janela e concluída fora NÃO aparece como
+ * concluída dentro da janela; uma concluída dentro da janela aparece mesmo
+ * que tenha sido criada antes.
+ */
 export async function getTaskFlowEvolution(
   scope: IndicatorScope,
   granularity: EvolutionGranularity,
   range: DateRange | null
 ): Promise<FlowPoint[]> {
   if (!range?.from) return [];
-  const conditions = taskSqlConditions(scope, range, "tk");
-  const whereSql = Prisma.join(conditions, " AND ");
+  const createdSql = Prisma.join(taskSqlConditions(scope, range, "tk", "createdAt"), " AND ");
+  const completedSql = Prisma.join(taskSqlConditions(scope, range, "tk", "completedAt"), " AND ");
   const [createdRows, completedRows] = await Promise.all([
-    prisma.$queryRaw<{ bucket: Date; total: number }[]>`
-      SELECT ${bucketExpr(granularity)} AS bucket, count(*)::int AS total
+    prisma.$queryRaw<{ bucket: string; total: number }[]>`
+      SELECT ${bucketExpr(granularity, "createdAt")} AS bucket, count(*)::int AS total
       FROM tasks tk
-      WHERE ${whereSql}
+      WHERE ${createdSql}
       GROUP BY bucket
       ORDER BY bucket ASC
     `,
-    prisma.$queryRaw<{ bucket: Date; total: number }[]>`
-      SELECT ${bucketExpr(granularity)} AS bucket, count(*)::int AS total
+    prisma.$queryRaw<{ bucket: string; total: number }[]>`
+      SELECT ${bucketExpr(granularity, "completedAt")} AS bucket, count(*)::int AS total
       FROM tasks tk
-      WHERE ${whereSql} AND tk."completedAt" IS NOT NULL AND tk."completedAt" >= ${range.from}
+      WHERE ${completedSql}
       GROUP BY bucket
       ORDER BY bucket ASC
     `,
   ]);
+
   const byBucket = new Map<string, FlowPoint>();
-  for (const r of createdRows) {
-    const key = r.bucket.toISOString().slice(0, 10);
-    const prev = byBucket.get(key);
-    byBucket.set(key, { bucket: key, created: Number(r.total), completed: prev?.completed ?? 0 });
-  }
-  for (const r of completedRows) {
-    const key = r.bucket.toISOString().slice(0, 10);
-    const prev = byBucket.get(key);
-    byBucket.set(key, { bucket: key, created: prev?.created ?? 0, completed: Number(r.total) });
-  }
+  const point = (key: string) => {
+    let p = byBucket.get(key);
+    if (!p) {
+      p = { bucket: key, created: 0, completed: 0 };
+      byBucket.set(key, p);
+    }
+    return p;
+  };
+  for (const r of createdRows) point(r.bucket).created = Number(r.total);
+  for (const r of completedRows) point(r.bucket).completed = Number(r.total);
+
   return [...byBucket.values()].sort((a, b) => a.bucket.localeCompare(b.bucket));
 }
 
@@ -331,9 +364,12 @@ export async function getTeamBoard(scope: IndicatorScope, range: DateRange | nul
   const base = buildTaskWhere(scope, range);
   const where = { ...base, teamId: scope.teamId ?? { not: null } } as TaskWhere;
   const whereDone = { ...where, status: "DONE" } as TaskWhere;
+  // Atrasadas derivam do MESMO filtro da lista (inclusive teamId), senão a
+  // coluna "atrasadas" contaria tarefas fora do recorte exibido.
   const whereOverdue = {
-    ...base,
-    AND: [{ status: { not: "DONE" } }, { dueDate: { lt: new Date() } }],
+    ...where,
+    status: { not: "DONE" },
+    dueDate: { lt: new Date() },
   } as TaskWhere;
   const [teams, total, done, overdue] = await Promise.all([
     prisma.team.findMany({
@@ -391,16 +427,16 @@ export async function getMemberBoard(scope: IndicatorScope, range: DateRange | n
       },
       orderBy: { joinedAt: "asc" },
     }),
-    prisma.$queryRaw<{ id: string; total: number; done: number; overdue: number }[]>`
+    (prisma.$queryRaw as unknown as (args: unknown) => Promise<unknown>)(`
       SELECT ta."memberId" AS id,
         count(*)::int AS total,
         count(*) FILTER (WHERE tk."status" = 'DONE')::int AS done,
         count(*) FILTER (WHERE tk."status" <> 'DONE' AND tk."dueDate" < now())::int AS overdue
       FROM task_assignees ta
       JOIN tasks tk ON tk.id = ta."taskId"
-      WHERE ${Prisma.join(taskSqlConditions(scope, range, "tk"), " AND ")}
+      WHERE ${Prisma.join(taskSqlConditions(scope, range, "tk", "createdAt"), " AND ")}
       GROUP BY ta."memberId"
-    `,
+    `) as Promise<{ id: string; total: number; done: number; overdue: number }[]>,
   ]);
   const byId = new Map(raw.map((r) => [r.id, r]));
   return members.map((m) => {
@@ -442,8 +478,9 @@ export async function getProjectBoard(scope: IndicatorScope, range: DateRange | 
   const where = { ...base, projectId: scope.projectId ?? { not: null } } as TaskWhere;
   const whereDone = { ...where, status: "DONE" } as TaskWhere;
   const whereOverdue = {
-    ...base,
-    AND: [{ status: { not: "DONE" } }, { dueDate: { lt: new Date() } }],
+    ...where,
+    status: { not: "DONE" },
+    dueDate: { lt: new Date() },
   } as TaskWhere;
   const [projects, total, done, overdue] = await Promise.all([
     prisma.project.findMany({

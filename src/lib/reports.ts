@@ -13,6 +13,22 @@ import {
   type IndicatorScope,
   type ProjectRow,
 } from "@/lib/indicator-queries";
+import {
+  goalVisibilityWhere,
+  projectVisibilityWhere,
+  teamVisibilityWhere,
+  visibleMembersWhere,
+} from "@/server/scope/rules";
+import type { Prisma } from "@prisma/client";
+
+/**
+ * Filtro de membro aplicável às tabelas de junção (team_members,
+ * project_members, goal_members). O escopo é resolvido sobre o
+ * OrganizationMember e depois filtrado por `memberId`.
+ */
+function memberFilter(scope: IndicatorScope): Prisma.OrganizationMemberWhereInput {
+  return scope.restrict ? visibleMembersWhere(scope.restrict) : { organizationId: scope.orgId };
+}
 
 // ------------------------------------------------------------
 // RELATÓRIOS — linhas prontas para UI e exportação CSV.
@@ -86,15 +102,26 @@ export async function getTeamReportRows(
   const [board, teams, projectCounts] = await Promise.all([
     getTeamBoard(scope, range),
     prisma.team.findMany({
-      where: { organizationId: scope.orgId, archivedAt: null },
+      // Escopo de visibilidade: sem restrict, a organização inteira.
+      where: {
+        ...(scope.restrict ? teamVisibilityWhere(scope.restrict) : {}),
+        organizationId: scope.orgId,
+        archivedAt: null,
+      },
       include: {
         department: { select: { name: true } },
-        _count: { select: { members: true } },
+        // Conta apenas membros visíveis ao usuário, evitando expor o
+        // tamanho real de equipes fora do seu escopo.
+        _count: { select: { members: { where: { member: memberFilter(scope) } } } },
       },
     }),
     prisma.project.groupBy({
       by: ["teamId"],
-      where: { organizationId: scope.orgId, teamId: { not: null } },
+      where: {
+        ...(scope.restrict ? projectVisibilityWhere(scope.restrict) : {}),
+        organizationId: scope.orgId,
+        teamId: { not: null },
+      },
       _count: { _all: true },
     }),
   ]);
@@ -135,12 +162,24 @@ export async function getMemberReportRows(
     getMemberBoard(scope, range),
     prisma.projectMember.groupBy({
       by: ["memberId"],
-      where: { project: { organizationId: scope.orgId } },
+      where: {
+        member: memberFilter(scope),
+        project: {
+          ...(scope.restrict ? projectVisibilityWhere(scope.restrict) : {}),
+          organizationId: scope.orgId,
+        },
+      },
       _count: { _all: true },
     }),
     prisma.goalMember.groupBy({
       by: ["memberId"],
-      where: { goal: { organizationId: scope.orgId } },
+      where: {
+        member: memberFilter(scope),
+        goal: {
+          ...(scope.restrict ? goalVisibilityWhere(scope.restrict) : {}),
+          organizationId: scope.orgId,
+        },
+      },
       _count: { _all: true },
     }),
   ]);

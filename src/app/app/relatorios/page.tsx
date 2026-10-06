@@ -5,6 +5,14 @@ import { FileDown } from "lucide-react";
 import { getAppShellData } from "@/server/page-data";
 import { prisma } from "@/lib/prisma";
 import { permits } from "@/lib/rbac";
+import { getPageDataScope } from "@/server/scope";
+import {
+  departmentVisibilityWhere,
+  indicatorScopeFor,
+  projectVisibilityWhere,
+  teamVisibilityWhere,
+  visibleMembersWhere,
+} from "@/server/scope/rules";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { PageHeader } from "@/components/ui/page-header";
 import { statusBadge } from "@/components/ui/badge";
@@ -56,28 +64,38 @@ export default async function RelatoriosPage(props: {
   const f = parsed.success ? parsed.data : {};
   const period = (f.period ?? "30d") as IndicatorScope["period"];
   const range = periodRange(period, f.from, f.to);
-  const scope: IndicatorScope = { orgId: app.org.id, period, ...f };
+
+  // SCOPE: delimita as linhas visíveis. `memberId` do cliente é FORÇADO para o
+  // próprio membro fora do escopo organizacional, evitando IDOR de relatório.
+  const dataScope = await getPageDataScope(redirect);
+  const scope: IndicatorScope = indicatorScopeFor(dataScope, {
+    orgId: dataScope.orgId,
+    period,
+    ...f,
+  });
+  scope.restrict = dataScope;
 
   const rows = await reportRows(kind, scope, range);
 
+  // Os filtros também respeitam o escopo, para não expor a estrutura da org.
   const [teams, departments, members, projects] = await Promise.all([
     prisma.team.findMany({
-      where: { organizationId: app.org.id, archivedAt: null },
+      where: { ...teamVisibilityWhere(dataScope), archivedAt: null },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
     prisma.department.findMany({
-      where: { organizationId: app.org.id },
+      where: departmentVisibilityWhere(dataScope),
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
     prisma.organizationMember.findMany({
-      where: { organizationId: app.org.id },
+      where: visibleMembersWhere(dataScope),
       select: { id: true, user: { select: { name: true } } },
       orderBy: { joinedAt: "asc" },
     }).then((ms) => ms.map((m) => ({ id: m.id, name: m.user.name }))),
     prisma.project.findMany({
-      where: { organizationId: app.org.id },
+      where: projectVisibilityWhere(dataScope),
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),

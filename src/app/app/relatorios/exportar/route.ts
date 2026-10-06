@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { requireSessionApi, getActiveOrg } from "@/lib/auth";
 import { permits } from "@/lib/rbac";
 import { AppError } from "@/lib/errors";
 import { indicatorScopeSchema } from "@/lib/validations";
 import { periodRange } from "@/lib/indicator-metrics";
 import { reportRows, exportCsv, type ReportKind } from "@/lib/reports";
 import type { IndicatorScope } from "@/lib/indicator-queries";
+import { requireDataScope } from "@/server/scope";
+import { indicatorScopeFor } from "@/server/scope/rules";
 
 export const dynamic = "force-dynamic";
 
@@ -13,15 +14,9 @@ const KINDS: ReportKind[] = ["tasks", "projects", "teams", "members", "goals"];
 
 export async function GET(req: Request) {
   try {
-    const session = await requireSessionApi();
-    const org = await getActiveOrg(session);
-    if (!org) {
-      throw new AppError("NO_ORG", "Você ainda não possui uma organização.", 404);
-    }
-    if (org.membership.status !== "ATIVO") {
-      throw new AppError("FORBIDDEN", "Seu acesso a esta organização está desativado.", 403);
-    }
-    if (!permits(org.role, "reports.export")) {
+    // Mesmo fluxo do resto do sistema: sessão -> membership ATIVA -> escopo.
+    const scope = await requireDataScope();
+    if (!permits(scope.role, "reports.export")) {
       throw new AppError("FORBIDDEN", "Sem permissão para exportar relatórios.", 403);
     }
 
@@ -46,9 +41,16 @@ export async function GET(req: Request) {
     const f = parsed.success ? parsed.data : {};
     const period = (f.period ?? "30d") as IndicatorScope["period"];
     const range = periodRange(period, f.from, f.to);
-    const scope: IndicatorScope = { orgId: org.id, period, ...f };
+    // O `memberId` vindo da query string é FORÇADO para o próprio membro fora
+    // do escopo organizacional: exportar não pode contornar o Data Scope.
+    const indicatorScope: IndicatorScope = indicatorScopeFor(scope, {
+      orgId: scope.orgId,
+      period,
+      ...f,
+    });
+    indicatorScope.restrict = scope;
 
-    const rows = await reportRows(kind, scope, range);
+    const rows = await reportRows(kind, indicatorScope, range);
     const csv = exportCsv(kind, rows);
     const date = new Date().toISOString().slice(0, 10);
 
