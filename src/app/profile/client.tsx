@@ -47,7 +47,7 @@ import {
   LOCALES,
   type UserPreferences,
 } from "@/lib/user-preferences";
-import type { RoleName, MemberStatus } from "@prisma/client";
+import type { RoleName, MemberStatus } from "@/lib/roles";
 
 type TabId = "perfil" | "seguranca" | "preferencias" | "sessoes";
 

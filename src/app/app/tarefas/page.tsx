@@ -1,7 +1,15 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { getAppShellData } from "@/server/page-data";
 import { prisma } from "@/lib/prisma";
 import { permits } from "@/lib/rbac";
+import {
+  getPageDataScope,
+  projectVisibilityWhere,
+  taskVisibilityWhere,
+  teamVisibilityWhere,
+  visibleMembersWhere,
+} from "@/server/scope";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { TasksClient } from "./client";
 
@@ -15,9 +23,13 @@ export default async function TarefasPage({
   const app = await getAppShellData();
   const { criar, abrir } = await searchParams;
 
+  // Data Scope: as tarefas e as listas de apoio respeitam o escopo do perfil.
+  // Antes, `organizationId` sozinho expunha as tarefas da organização ao MEMBER.
+  const scope = await getPageDataScope(redirect);
+
   const [tasks, projects, teams, members] = await Promise.all([
     prisma.task.findMany({
-      where: { organizationId: app.org.id },
+      where: taskVisibilityWhere(scope),
       include: {
         project: { select: { id: true, name: true } },
         team: { select: { id: true, name: true } },
@@ -38,17 +50,17 @@ export default async function TarefasPage({
       take: 250,
     }),
     prisma.project.findMany({
-      where: { organizationId: app.org.id },
+      where: projectVisibilityWhere(scope),
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
     prisma.team.findMany({
-      where: { organizationId: app.org.id, archivedAt: null },
+      where: { ...teamVisibilityWhere(scope), archivedAt: null },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
     prisma.organizationMember.findMany({
-      where: { organizationId: app.org.id },
+      where: visibleMembersWhere(scope),
       select: { id: true, user: { select: { id: true, name: true } } },
       orderBy: { joinedAt: "asc" },
     }),

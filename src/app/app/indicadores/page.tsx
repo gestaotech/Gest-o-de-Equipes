@@ -18,6 +18,15 @@ import {
   type EvolutionGranularity,
   type IndicatorScope,
 } from "@/lib/indicator-queries";
+import {
+  canAccessIndicatorsModule,
+  departmentVisibilityWhere,
+  getPageDataScope,
+  indicatorScopeFor,
+  projectVisibilityWhere,
+  teamVisibilityWhere,
+  visibleMembersWhere,
+} from "@/server/scope";
 import { IndicadoresView } from "./view";
 
 export const metadata: Metadata = { title: "Indicadores" };
@@ -38,7 +47,9 @@ export default async function IndicadoresPage(props: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const app = await getAppShellData();
-  if (!permits(app.org.role, "indicators.read")) redirect("/dashboard");
+
+  // PERMISSION: pode abrir o módulo? (RBAC já existente, sem duplicar regra)
+  if (!canAccessIndicatorsModule(permits, app.org.role)) redirect("/dashboard");
 
   const sp = await props.searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -56,7 +67,18 @@ export default async function IndicadoresPage(props: {
   const f = parsed.success ? parsed.data : {};
   const period = (f.period ?? "30d") as IndicatorScope["period"];
   const range = periodRange(period, f.from, f.to);
-  const scope: IndicatorScope = { orgId: app.org.id, period, ...f };
+
+  // SCOPE: delimita quais linhas o usuário pode ver.
+  const dataScope = await getPageDataScope(redirect);
+
+  // Escopo não-organizacional: o memberId do cliente é FORÇADO para o próprio
+  // membro, evitando ler indicadores de outra pessoa via manipulação de URL.
+  const scope: IndicatorScope = indicatorScopeFor(dataScope, {
+    orgId: dataScope.orgId,
+    period,
+    ...f,
+  });
+  scope.restrict = dataScope;
 
   const span = range?.from
     ? (range.to ?? new Date()).getTime() - range.from.getTime()
@@ -93,22 +115,22 @@ export default async function IndicadoresPage(props: {
     getProjectBoard(scope, range),
     getGoalRows(scope),
     prisma.team.findMany({
-      where: { organizationId: app.org.id, archivedAt: null },
+      where: { ...teamVisibilityWhere(dataScope), archivedAt: null },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
     prisma.department.findMany({
-      where: { organizationId: app.org.id },
+      where: departmentVisibilityWhere(dataScope),
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
     prisma.organizationMember.findMany({
-      where: { organizationId: app.org.id },
+      where: visibleMembersWhere(dataScope),
       select: { id: true, user: { select: { name: true } } },
       orderBy: { joinedAt: "asc" },
     }).then((ms) => ms.map((m) => ({ id: m.id, name: m.user.name }))),
     prisma.project.findMany({
-      where: { organizationId: app.org.id },
+      where: projectVisibilityWhere(dataScope),
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),

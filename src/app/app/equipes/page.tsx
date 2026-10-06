@@ -1,7 +1,14 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { getAppShellData } from "@/server/page-data";
 import { prisma } from "@/lib/prisma";
 import { permits } from "@/lib/rbac";
+import {
+  departmentVisibilityWhere,
+  getPageDataScope,
+  teamVisibilityWhere,
+  visibleMembersWhere,
+} from "@/server/scope";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { TeamsClient } from "./client";
 
@@ -9,9 +16,14 @@ export const metadata: Metadata = { title: "Equipes" };
 
 export default async function EquipesPage() {
   const app = await getAppShellData();
+
+  // Data Scope: MEMBER só vê as equipes das quais participa; LEADER vê as que lidera.
+  // A lista de membros também é restrita (evita vazar e-mails da organização).
+  const scope = await getPageDataScope(redirect);
+
   const [teams, departments, members] = await Promise.all([
     prisma.team.findMany({
-      where: { organizationId: app.org.id, archivedAt: null },
+      where: { ...teamVisibilityWhere(scope), archivedAt: null },
       include: {
         lead: { include: { user: { select: { name: true } } } },
         members: {
@@ -27,12 +39,12 @@ export default async function EquipesPage() {
       orderBy: { name: "asc" },
     }),
     prisma.department.findMany({
-      where: { organizationId: app.org.id, archivedAt: null },
+      where: { ...departmentVisibilityWhere(scope), archivedAt: null },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
     prisma.organizationMember.findMany({
-      where: { organizationId: app.org.id },
+      where: visibleMembersWhere(scope),
       select: {
         id: true,
         user: { select: { id: true, name: true, email: true } },

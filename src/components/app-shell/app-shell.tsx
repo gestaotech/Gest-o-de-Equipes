@@ -25,7 +25,7 @@ import {
   Plus,
   UserRound,
 } from "lucide-react";
-import type { RoleName } from "@prisma/client";
+import type { RoleName } from "@/lib/roles";
 import { Logo } from "@/components/ui/logo";
 import { Avatar } from "@/components/ui/avatar";
 import { Dropdown } from "@/components/ui/dropdown";

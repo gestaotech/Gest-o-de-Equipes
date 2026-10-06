@@ -1,22 +1,8 @@
-import type { RoleName } from "@prisma/client";
+import type { RoleName } from "@/lib/roles";
+import { ROLE_ORDER, ROLE_LABEL } from "@/lib/roles";
 
 export type { RoleName };
-
-export const ROLE_ORDER: Record<RoleName, number> = {
-  OWNER: 5,
-  ADMIN: 4,
-  MANAGER: 3,
-  LEADER: 2,
-  MEMBER: 1,
-};
-
-export const ROLE_LABEL: Record<RoleName, string> = {
-  OWNER: "Proprietário",
-  ADMIN: "Administrador",
-  MANAGER: "Gerente",
-  LEADER: "Líder",
-  MEMBER: "Membro",
-};
+export { ROLE_ORDER, ROLE_LABEL };
 
 /** true quando o papel possui nível >= mínimo */
 export function hasRole(role: RoleName, min: RoleName): boolean {

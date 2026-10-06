@@ -1,7 +1,14 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { getAppShellData } from "@/server/page-data";
 import { prisma } from "@/lib/prisma";
 import { permits } from "@/lib/rbac";
+import {
+  getPageDataScope,
+  goalVisibilityWhere,
+  teamVisibilityWhere,
+  visibleMembersWhere,
+} from "@/server/scope";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { GoalsClient } from "./client";
 
@@ -9,9 +16,13 @@ export const metadata: Metadata = { title: "Metas" };
 
 export default async function MetasPage() {
   const app = await getAppShellData();
+
+  // Data Scope: MEMBER só enxerga metas das quais é responsável ou membro.
+  const scope = await getPageDataScope(redirect);
+
   const [goals, teams, members] = await Promise.all([
     prisma.goal.findMany({
-      where: { organizationId: app.org.id },
+      where: goalVisibilityWhere(scope),
       include: {
         responsible: { include: { user: { select: { name: true } } } },
         team: { select: { id: true, name: true } },
@@ -20,12 +31,12 @@ export default async function MetasPage() {
       orderBy: { createdAt: "desc" },
     }),
     prisma.team.findMany({
-      where: { organizationId: app.org.id, archivedAt: null },
+      where: { ...teamVisibilityWhere(scope), archivedAt: null },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
     prisma.organizationMember.findMany({
-      where: { organizationId: app.org.id },
+      where: visibleMembersWhere(scope),
       select: { id: true, user: { select: { name: true } } },
       orderBy: { joinedAt: "asc" },
     }),

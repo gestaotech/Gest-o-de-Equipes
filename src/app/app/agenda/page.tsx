@@ -1,7 +1,14 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { getAppShellData } from "@/server/page-data";
 import { prisma } from "@/lib/prisma";
 import { permits } from "@/lib/rbac";
+import {
+  eventVisibilityWhere,
+  getPageDataScope,
+  projectVisibilityWhere,
+  teamVisibilityWhere,
+} from "@/server/scope";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { AgendaClient } from "./client";
 
@@ -9,9 +16,14 @@ export const metadata: Metadata = { title: "Agenda" };
 
 export default async function AgendaPage() {
   const app = await getAppShellData();
+
+  // Data Scope (modelo atual, sem EventParticipant):
+  // MEMBER vê evento pessoal, da sua equipe, de projeto/tarefa permitidos.
+  const scope = await getPageDataScope(redirect);
+
   const [events, teams, projects] = await Promise.all([
     prisma.event.findMany({
-      where: { organizationId: app.org.id },
+      where: eventVisibilityWhere(scope),
       include: {
         project: { select: { id: true, name: true } },
         team: { select: { id: true, name: true } },
@@ -21,12 +33,12 @@ export default async function AgendaPage() {
       take: 120,
     }),
     prisma.team.findMany({
-      where: { organizationId: app.org.id, archivedAt: null },
+      where: { ...teamVisibilityWhere(scope), archivedAt: null },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
     prisma.project.findMany({
-      where: { organizationId: app.org.id },
+      where: projectVisibilityWhere(scope),
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),

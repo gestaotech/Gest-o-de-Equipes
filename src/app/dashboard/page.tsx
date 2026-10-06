@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { getAppShellData } from "@/server/page-data";
-import { ROLE_LABEL } from "@/lib/rbac";
+import { getPageDataScope } from "@/server/scope";
+import { ROLE_LABEL, permits } from "@/lib/rbac";
 import { periodRange } from "@/lib/indicator-metrics";
 import {
   getStatusDistribution,
   getTaskFlowEvolution,
   type EvolutionGranularity,
+  type IndicatorScope,
 } from "@/lib/indicator-queries";
 import { ReportPeriod } from "@/lib/indicator-metrics";
 import {
@@ -38,17 +41,21 @@ export default async function DashboardPage({
   const granularity: EvolutionGranularity = span == null ? "week" : span <= 32 * 86400000 ? "day" : span <= 190 * 86400000 ? "week" : "month";
 
   const memberMode = app.org.role === "MEMBER";
-  const scope = { orgId: app.org.id, period };
+
+  // Data Scope: TODOS os blocos abaixo respeitam o escopo do perfil.
+  // Antes passavam apenas orgId e o MEMBER via a organização inteira.
+  const scope = await getPageDataScope(redirect);
+  const indicatorScope: IndicatorScope = { orgId: scope.orgId, period, restrict: scope };
 
   const [kpis, priorityTasks, activeProjects, events, activity, flow, statusDist] =
     await Promise.all([
-      getDashboardKpis(app.org.id).catch(() => null),
-      getPriorityTasks(app.org.id, memberMode ? app.membershipId : null).catch(() => null),
-      getActiveProjects(app.org.id).catch(() => null),
-      getUpcomingEvents(app.org.id).catch(() => null),
-      getRecentActivity(app.org.id).catch(() => null),
-      getTaskFlowEvolution(scope, granularity, range).catch(() => null),
-      getStatusDistribution(scope, range).catch(() => null),
+      getDashboardKpis(scope).catch(() => null),
+      getPriorityTasks(scope).catch(() => null),
+      getActiveProjects(scope).catch(() => null),
+      getUpcomingEvents(scope).catch(() => null),
+      getRecentActivity(scope).catch(() => null),
+      getTaskFlowEvolution(indicatorScope, granularity, range).catch(() => null),
+      getStatusDistribution(indicatorScope, range).catch(() => null),
     ]);
 
   return (
@@ -66,8 +73,8 @@ export default async function DashboardPage({
         activity={activity}
         flow={flow}
         statusDist={statusDist}
-        canWriteTasks={app.org.role === "OWNER" || app.org.role === "ADMIN" || app.org.role === "MANAGER" || app.org.role === "LEADER"}
-        canWriteProjects={app.org.role === "OWNER" || app.org.role === "ADMIN" || app.org.role === "MANAGER"}
+        canWriteTasks={permits(app.org.role, "tasks.write")}
+        canWriteProjects={permits(app.org.role, "projects.write")}
       />
     </AppShell>
   );

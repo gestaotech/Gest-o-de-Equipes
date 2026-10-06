@@ -1,12 +1,38 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { ProjectStatus, TaskStatus } from "@prisma/client";
-import { getOrgSummary, getProjectBoard, type ProjectRow } from "@/lib/indicator-queries";
+import {
+  getOrgSummary,
+  getProjectBoard,
+  type IndicatorScope,
+  type ProjectRow,
+} from "@/lib/indicator-queries";
+import {
+  activityVisibilityWhere,
+  eventVisibilityWhere,
+  taskVisibilityWhere,
+  visibleMembersWhere,
+  type DataScope,
+} from "@/server/scope/rules";
 
 // ------------------------------------------------------------
-// DADOS DO DASHBOARD — consultas isoladas por bloco.
-// orgId é derivado da sessão no servidor (nunca do frontend).
+// DADOS DO DASHBOARD — todas as consultas respeitam o Data Scope.
+//
+// Antes estas funções recebiam apenas `orgId`, o que entregava a organização
+// inteira ao MEMBER. Agora recebem o Data Scope resolvido pela sessão
+// (session.sub -> OrganizationMember -> orgId + role) e aplicam o filtro
+// de visibilidade do perfil.
+//
+// `organizationId` continua vindo da sessão, nunca do frontend.
 // ------------------------------------------------------------
+
+/** Escopo de indicadores derivado do Data Scope (mantém orgId da sessão). */
+function indicatorScopeOf(
+  scope: DataScope,
+  period: IndicatorScope["period"] = "30d"
+): IndicatorScope {
+  return { orgId: scope.orgId, period, restrict: scope };
+}
 
 export type DashboardKpis = {
   members: number;
@@ -22,20 +48,25 @@ export type DashboardKpis = {
   goalsAtRisk: number;
 };
 
-export function getDashboardKpis(orgId: string): Promise<DashboardKpis> {
+export async function getDashboardKpis(scope: DataScope): Promise<DashboardKpis> {
   const startOfMonth = new Date();
   startOfMonth.setHours(0, 0, 0, 0);
   startOfMonth.setDate(1);
 
-  return Promise.all([
+  // Contagens de pessoas respeitam o escopo: MEMBER não conta a organização.
+  const memberWhere = visibleMembersWhere(scope);
+
+  const [members, newMembersThisMonth, summary] = await Promise.all([
     prisma.organizationMember.count({
-      where: { organizationId: orgId, status: "ATIVO" },
+      where: { ...memberWhere, status: "ATIVO" },
     }),
     prisma.organizationMember.count({
-      where: { organizationId: orgId, joinedAt: { gte: startOfMonth } },
+      where: { ...memberWhere, joinedAt: { gte: startOfMonth } },
     }),
-    getOrgSummary({ orgId, period: "30d" }, null),
-  ]).then(([members, newMembersThisMonth, summary]) => ({
+    getOrgSummary(indicatorScopeOf(scope), null),
+  ]);
+
+  return {
     members,
     newMembersThisMonth,
     tasksPending: summary.tasks.pending,
@@ -47,7 +78,7 @@ export function getDashboardKpis(orgId: string): Promise<DashboardKpis> {
     projectsOverdue: summary.projects.overdue,
     goalsInProgress: summary.goals.inProgress,
     goalsAtRisk: summary.goals.atRisk,
-  }));
+  };
 }
 
 export type DashboardTask = {
@@ -63,17 +94,12 @@ export type DashboardTask = {
 
 const PRIORITY_RANK: Record<string, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
 
-export async function getPriorityTasks(
-  orgId: string,
-  memberId: string | null,
-  take = 6
-): Promise<DashboardTask[]> {
+export async function getPriorityTasks(scope: DataScope, take = 6): Promise<DashboardTask[]> {
   const now = Date.now();
   const pending = await prisma.task.findMany({
     where: {
-      organizationId: orgId,
+      ...taskVisibilityWhere(scope),
       status: { not: TaskStatus.DONE },
-      ...(memberId ? { assignees: { some: { memberId } } } : {}),
     },
     include: {
       project: { select: { name: true } },
@@ -110,8 +136,8 @@ export async function getPriorityTasks(
   return sorted.slice(0, take);
 }
 
-export async function getActiveProjects(orgId: string, take = 5): Promise<ProjectRow[]> {
-  const board = await getProjectBoard({ orgId, period: "30d" }, null);
+export async function getActiveProjects(scope: DataScope, take = 5): Promise<ProjectRow[]> {
+  const board = await getProjectBoard(indicatorScopeOf(scope), null);
   return board
     .filter((p) => p.status === ProjectStatus.EM_ANDAMENTO)
     .sort((a, b) => {
@@ -129,11 +155,11 @@ export type DashboardEvent = {
   projectName: string | null;
 };
 
-export async function getUpcomingEvents(orgId: string, take = 6): Promise<DashboardEvent[]> {
+export async function getUpcomingEvents(scope: DataScope, take = 6): Promise<DashboardEvent[]> {
   const now = new Date();
   const horizon = new Date(now.getTime() + 14 * 86400000);
   const events = await prisma.event.findMany({
-    where: { organizationId: orgId, startsAt: { gte: now, lte: horizon } },
+    where: { ...eventVisibilityWhere(scope), startsAt: { gte: now, lte: horizon } },
     include: { project: { select: { name: true } } },
     orderBy: { startsAt: "asc" },
     take,
@@ -153,9 +179,9 @@ export type DashboardActivity = {
   createdAt: Date;
 };
 
-export async function getRecentActivity(orgId: string, take = 6): Promise<DashboardActivity[]> {
+export async function getRecentActivity(scope: DataScope, take = 6): Promise<DashboardActivity[]> {
   const logs = await prisma.activityLog.findMany({
-    where: { organizationId: orgId },
+    where: activityVisibilityWhere(scope),
     include: { user: { select: { name: true } } },
     orderBy: { createdAt: "desc" },
     take,

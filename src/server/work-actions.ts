@@ -11,6 +11,12 @@ import {
   announcementSchema,
 } from "@/lib/validations";
 import { getContext, guardPerm, validateOrgReferences } from "@/server/guards";
+import {
+  requireDataScope,
+  canAccessGoal,
+  canAccessProject,
+  canAccessTask,
+} from "@/server/scope";
 import { logActivity, notify } from "@/server/activity";
 import type {
   ProjectStatus,
@@ -89,9 +95,13 @@ export async function createProject(input: unknown) {
 
 export async function updateProject(input: { id: string } & Record<string, unknown>) {
   return handleAction(async () => {
-    const { orgId, membership } = await getContext();
+    const scope = await requireDataScope();
+    const { orgId, membership } = scope;
     guardPerm(membership, "projects.write");
     const data = projectSchema.parse(input);
+    if (!(await canAccessProject(scope, input.id))) {
+      throw new AppError("FORBIDDEN", "Projeto fora do seu escopo.", 403);
+    }
     const project = await prisma.project.findFirst({
       where: { id: input.id, organizationId: orgId },
     });
@@ -193,9 +203,13 @@ export async function createTask(input: unknown) {
 
 export async function updateTask(input: { id: string } & Record<string, unknown>) {
   return handleAction(async () => {
-    const { orgId, membership } = await getContext();
+    const scope = await requireDataScope();
+    const { orgId, membership } = scope;
     guardPerm(membership, "tasks.write");
     const data = taskSchema.parse(input);
+    if (!(await canAccessTask(scope, input.id))) {
+      throw new AppError("FORBIDDEN", "Tarefa fora do seu escopo.", 403);
+    }
     const task = await prisma.task.findFirst({
       where: { id: input.id, organizationId: orgId },
     });
@@ -242,8 +256,12 @@ await prisma.task.update({
 
 export async function setTaskStatus(input: { id: string; status: string }) {
   return handleAction(async () => {
-    const { orgId, membership } = await getContext();
+    const scope = await requireDataScope();
+    const { orgId, membership } = scope;
     guardPerm(membership, "tasks.write");
+    if (!(await canAccessTask(scope, input.id))) {
+      throw new AppError("FORBIDDEN", "Tarefa fora do seu escopo.", 403);
+    }
     const status = taskStatus(input.status);
     const task = await prisma.task.findFirst({
       where: { id: input.id, organizationId: orgId },
@@ -356,9 +374,13 @@ export async function createGoal(input: unknown) {
 
 export async function updateGoal(input: { id: string } & Record<string, unknown>) {
   return handleAction(async () => {
-    const { orgId, membership } = await getContext();
+    const scope = await requireDataScope();
+    const { orgId, membership } = scope;
     guardPerm(membership, "goals.write");
     const data = goalSchema.parse(input);
+    if (!(await canAccessGoal(scope, input.id))) {
+      throw new AppError("FORBIDDEN", "Meta fora do seu escopo.", 403);
+    }
     const goal = await prisma.goal.findFirst({
       where: { id: input.id, organizationId: orgId },
     });

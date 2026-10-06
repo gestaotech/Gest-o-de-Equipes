@@ -3,6 +3,12 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSession, getActiveOrg } from "@/lib/auth";
 import { permits } from "@/lib/rbac";
+import {
+  activityVisibilityWhere,
+  dataScopeFrom,
+  visibleMembersWhere,
+} from "@/server/scope/rules";
+import type { RoleName } from "@/lib/rbac";
 
 const PAGE_SIZE = 20;
 const DAY = 86400000;
@@ -82,16 +88,34 @@ export async function GET(req: NextRequest) {
 
   const range = buildRange(period, sp.get("from") ?? undefined, sp.get("to") ?? undefined);
 
-  const where: Prisma.ActivityLogWhereInput = { organizationId: org.id };
+  // Data Scope: o ActivityLog é filtrado pelo escopo do perfil (defesa em
+  // profundidade, mesmo com `audit.read`). `organizationId` sozinho nunca
+  // autoriza a leitura da auditoria inteira da organização.
+  const scope = dataScopeFrom({
+    orgId: org.id,
+    userId: session.sub,
+    memberId: org.membership.id,
+    role: org.role as RoleName,
+    departmentId: org.membership.departmentId,
+  });
+
+  const where: Prisma.ActivityLogWhereInput = activityVisibilityWhere(scope);
   if (range) where.createdAt = { gte: range.gte, lte: range.lte };
   if (action) where.action = action;
   if (entity) where.entity = entity;
+  // O filtro de userId também respeita o escopo: um MEMBER não busca a
+  // atividade de outra pessoa alterando o parâmetro.
   if (userId) where.userId = userId;
   if (search) {
-    where.OR = [
-      { action: { contains: search, mode: "insensitive" } },
-      { entity: { contains: search, mode: "insensitive" } },
-      { user: { name: { contains: search, mode: "insensitive" } } },
+    // A busca entra em `AND` para NUNCA sobrescrever o `OR` de visibilidade.
+    where.AND = [
+      {
+        OR: [
+          { action: { contains: search, mode: "insensitive" } },
+          { entity: { contains: search, mode: "insensitive" } },
+          { user: { name: { contains: search, mode: "insensitive" } } },
+        ],
+      },
     ];
   }
 
@@ -114,7 +138,7 @@ export async function GET(req: NextRequest) {
 
     // Lista de usuários para o filtro da tela.
     const memberships = await prisma.organizationMember.findMany({
-      where: { organizationId: org.id },
+      where: visibleMembersWhere(scope),
       select: { userId: true, user: { select: { name: true } } },
       orderBy: { joinedAt: "asc" },
     });

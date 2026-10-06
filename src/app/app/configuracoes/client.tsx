@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { toast } from "@/components/ui/toast";
 import { ROLE_LABEL } from "@/lib/rbac";
-import type { RoleName } from "@prisma/client";
+import type { RoleName } from "@/lib/roles";
 import type { ActionResult } from "@/lib/types";
 
 type Member = {

@@ -9,10 +9,24 @@ import {
   progressPercent,
   type ReportPeriod,
 } from "@/lib/indicator-metrics";
+import {
+  goalVisibilityWhere,
+  projectVisibilityWhere,
+  taskVisibilityWhere,
+  teamVisibilityWhere,
+  visibleMembersWhere,
+  type DataScope,
+} from "@/server/scope/rules";
 
 // ------------------------------------------------------------
 // INDICADORES — consultas/agregações no banco (COUNT · GROUP BY).
-// scope.orgId é derivado da sessão no servidor, nunca do frontend.
+//
+// PERMISSION x SCOPE (fase 1.1):
+//   - PERMISSION: quem pode abrir o módulo (permits → RBAC).
+//   - SCOPE:      `scope.restrict` (Data Scope) delimita QUAIS linhas o
+//                 usuário enxerga. Sem ele, a consulta é organizacional.
+//
+// orgId é derivado da sessão no servidor, nunca do frontend.
 // ------------------------------------------------------------
 
 export type IndicatorScope = {
@@ -26,13 +40,36 @@ export type IndicatorScope = {
   projectId?: string;
   status?: TaskStatus;
   priority?: TaskPriority;
+  /**
+   * Data Scope do usuário. Quando presente, TODA a consulta é restringida
+   * ao que ele pode ver. Quando ausente, assume escopo organizacional —
+   * use apenas emRotinas administrativas já protegidas por RBAC.
+   */
+  restrict?: DataScope;
 };
+
+/** Escopo organizacional explícito (uso administrativo). */
+export function orgWideScope(scope: Omit<IndicatorScope, "restrict">): IndicatorScope {
+  return { ...scope };
+}
 
 export type TaskWhere = Prisma.TaskWhereInput;
 
+/**
+ * Base de visibilidade. Sem `restrict`, o escopo é a organização inteira
+ * (comportamento administrativo preservado).
+ */
+function baseWhere<T>(
+  scope: IndicatorScope,
+  restricted: (s: DataScope) => T
+): T & { organizationId: string } {
+  const base = scope.restrict ? restricted(scope.restrict) : ({} as T);
+  return { ...base, organizationId: scope.orgId };
+}
+
 export function buildTaskWhere(scope: IndicatorScope, range: DateRange | null): TaskWhere {
   return {
-    organizationId: scope.orgId,
+    ...baseWhere(scope, taskVisibilityWhere),
     ...(range?.from
       ? { createdAt: { gte: range.from, ...(range.to ? { lt: range.to } : {}) } }
       : {}),
@@ -47,7 +84,7 @@ export function buildTaskWhere(scope: IndicatorScope, range: DateRange | null): 
 
 export function buildProjectWhere(scope: IndicatorScope, range: DateRange | null): Prisma.ProjectWhereInput {
   return {
-    organizationId: scope.orgId,
+    ...baseWhere(scope, projectVisibilityWhere),
     ...(range?.from
       ? { createdAt: { gte: range.from, ...(range.to ? { lt: range.to } : {}) } }
       : {}),
@@ -130,6 +167,45 @@ export async function getPriorityDistribution(scope: IndicatorScope, range: Date
 
 export type EvolutionGranularity = "day" | "week" | "month";
 
+/**
+ * Tradução SQL das MESMAS regras de `taskVisibilityWhere` (rules.ts).
+ * Mantida aqui porque as evoluções/agregações usam SQL bruto.
+ * `organizationId` sozinho nunca autoriza: exige atribuição, autoria ou
+ * relação com projeto/equipe dentro do escopo do usuário.
+ */
+function taskVisibilitySql(s: DataScope, alias: string): Prisma.Sql | null {
+  if (s.level === "ORG") return null;
+  const t = Prisma.raw(alias);
+  const m = s.memberId;
+  const u = s.userId;
+
+  const projectVisible = Prisma.sql`EXISTS (
+    SELECT 1 FROM projects pv
+    WHERE pv.id = ${t}."projectId"
+      AND (
+        pv."responsibleId" = ${m}
+        OR EXISTS (SELECT 1 FROM project_members pvm WHERE pvm."projectId" = pv.id AND pvm."memberId" = ${m})
+        ${
+          s.level === "LEAD"
+            ? Prisma.sql`OR EXISTS (SELECT 1 FROM teams pvt WHERE pvt.id = pv."teamId" AND pvt."leadId" = ${m})`
+            : Prisma.empty
+        }
+      )
+  )`;
+
+  const rel: Prisma.Sql[] = [
+    Prisma.sql`EXISTS (SELECT 1 FROM task_assignees tav WHERE tav."taskId" = ${t}.id AND tav."memberId" = ${m})`,
+    Prisma.sql`${t}."createdById" = ${u}`,
+    projectVisible,
+    Prisma.sql`EXISTS (SELECT 1 FROM team_members tmev WHERE tmev."teamId" = ${t}."teamId" AND tmev."memberId" = ${m})`,
+  ];
+  if (s.level === "LEAD") {
+    // Tarefa de uma equipe que o LEAD lidera.
+    rel.push(Prisma.sql`EXISTS (SELECT 1 FROM teams tll WHERE tll.id = ${t}."teamId" AND tll."leadId" = ${m})`);
+  }
+  return Prisma.sql`(${Prisma.join(rel, " OR ")})`;
+}
+
 function taskSqlConditions(
   scope: IndicatorScope,
   range: DateRange | null,
@@ -137,6 +213,10 @@ function taskSqlConditions(
 ): Prisma.Sql[] {
   const t = Prisma.raw(alias);
   const c: Prisma.Sql[] = [Prisma.sql`${t}."organizationId" = ${scope.orgId}`];
+  if (scope.restrict) {
+    const vis = taskVisibilitySql(scope.restrict, alias);
+    if (vis) c.push(vis);
+  }
   if (range?.from) {
     c.push(
       range.to
@@ -257,7 +337,9 @@ export async function getTeamBoard(scope: IndicatorScope, range: DateRange | nul
   } as TaskWhere;
   const [teams, total, done, overdue] = await Promise.all([
     prisma.team.findMany({
-      where: { organizationId: scope.orgId, archivedAt: null },
+      where: scope.restrict
+        ? { ...teamVisibilityWhere(scope.restrict), archivedAt: null }
+        : { organizationId: scope.orgId, archivedAt: null },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
@@ -301,7 +383,7 @@ export type MemberRow = {
 export async function getMemberBoard(scope: IndicatorScope, range: DateRange | null): Promise<MemberRow[]> {
   const [members, raw] = await Promise.all([
     prisma.organizationMember.findMany({
-      where: { organizationId: scope.orgId },
+      where: scope.restrict ? visibleMembersWhere(scope.restrict) : { organizationId: scope.orgId },
       include: {
         user: { select: { name: true } },
         department: { select: { name: true } },
@@ -365,7 +447,7 @@ export async function getProjectBoard(scope: IndicatorScope, range: DateRange | 
   } as TaskWhere;
   const [projects, total, done, overdue] = await Promise.all([
     prisma.project.findMany({
-      where: { organizationId: scope.orgId },
+      where: buildProjectWhere(scope, null),
       include: {
         responsible: { include: { user: { select: { name: true } } } },
         team: { select: { name: true } },
@@ -420,7 +502,9 @@ export type GoalRow = {
 };
 
 function goalWhere(scope: IndicatorScope): Prisma.GoalWhereInput {
+  const base = scope.restrict ? goalVisibilityWhere(scope.restrict) : { organizationId: scope.orgId };
   return {
+    ...base,
     organizationId: scope.orgId,
     ...(scope.teamId ? { teamId: scope.teamId } : {}),
     ...(scope.departmentId ? { team: { departmentId: scope.departmentId } } : {}),
