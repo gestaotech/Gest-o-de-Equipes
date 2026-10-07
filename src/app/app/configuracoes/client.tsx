@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Building2, User, Shield, CreditCard, Save } from "lucide-react";
 import { updateOrganizationInfo } from "@/server/org-actions";
 import { updateAccountInfo } from "@/server/auth-actions";
-import { setMemberRole } from "@/server/people-actions";
+import { addCollaborator } from "@/server/people-actions";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -86,7 +86,7 @@ export function SettingsClient({
   }
 
   async function changeRole(member: Member, role: string) {
-    const res = (await setMemberRole({ id: member.id, role })) as ActionResult;
+    const res = (await addCollaborator({ id: member.id, role })) as ActionResult;
     if (res.success) {
       toast("Permissão atualizada.");
       router.refresh();

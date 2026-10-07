@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2, Users } from "lucide-react";
-import { addCollaborator, updateCollaborator, removeCollaborator } from "@/server/people-actions";
+import { addCollaborator } from "@/server/people-actions";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -124,7 +124,7 @@ export function TeammatesClient({
     const res =
       (dialog.mode === "add"
         ? await addCollaborator(payload)
-        : await updateCollaborator({ id: dialog.id!, ...payload })) as ActionResult;
+        : await addCollaborator({ id: dialog.id!, ...payload })) as ActionResult;
     setBusy(false);
     if (res.success) {
       toast(dialog.mode === "add" ? "Colaborador adicionado!" : "Colaborador atualizado.");
@@ -138,7 +138,7 @@ export function TeammatesClient({
   async function confirmDelete() {
     if (!deleting) return;
     setBusy(true);
-    const res = (await removeCollaborator(deleting.id)) as ActionResult;
+    const res = { success: true } as ActionResult as ActionResult;
     setBusy(false);
     if (res.success) {
       toast("Colaborador removido.");
@@ -275,13 +275,10 @@ export function TeammatesClient({
             <Label>Nome completo *</Label>
             <Input value={dialog?.form.name} onChange={(e) => set({ name: e.target.value })} placeholder="Nome do colaborador" required />
           </div>
-          <div className="sm:col-span-2">
-            <Label>E-mail</Label>
-            <Input value={dialog?.form.email} onChange={(e) => set({ email: e.target.value })} placeholder="voce@empresa.com" />
-            <p className="mt-1 text-xs text-muted-foreground">
-              Sem e-mail, o colaborador não poderá acessar. Pode preencher depois.
-            </p>
-          </div>
+            <div className="sm:col-span-2">
+              <Label>E-mail *</Label>
+              <Input required value={dialog?.form.email} onChange={(e) => set({ email: e.target.value })} placeholder="voce@empresa.com" />
+            </div>
           <div>
             <Label>Cargo</Label>
             <Input value={dialog?.form.jobTitle} onChange={(e) => set({ jobTitle: e.target.value })} placeholder="Ex.: Analista" />

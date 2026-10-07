@@ -146,7 +146,7 @@ export const collaboratorSchema = z.object({
       const digit2 = remainder2 < 2 ? 0 : 11 - remainder2;
       return parseInt(cleaned.charAt(10)) === digit2;
     }, "CPF inválido."),
-  email: z.string().email("E-mail inválido.").max(160).or(z.literal("")),
+  email: z.string().email("E-mail inválido.").max(160).trim().toLowerCase(),
   jobTitle: z.string().max(80).optional(),
   permission: z.string().optional(), // OWNER|ADMIN|MANAGER|LEADER|MEMBER
   departmentId: z.string().optional().nullable(),

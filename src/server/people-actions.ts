@@ -207,7 +207,7 @@ export async function addCollaborator(input: unknown) {
     const { orgId, membership } = await getContext();
     guardPerm(membership, "users.write");
     const data = collaboratorSchema.parse(input);
-    const email = data.email ? normalizeEmail(data.email) : null;
+    const email = normalizeEmail(data.email);
 
     // Verificação hierárquica: quem pode criar qual role
     const role = (
@@ -227,36 +227,20 @@ export async function addCollaborator(input: unknown) {
     let userId: string;
     let createdUser = false;
 
-    if (email) {
-      const existing = await prisma.user.findUnique({ where: { email } });
-      if (existing) {
-        userId = existing.id;
-        const already = await prisma.organizationMember.findFirst({
-          where: { organizationId: orgId, userId },
-        });
-        if (already) {
-          throw new AppError("EXISTS", "Este colaborador já pertence à organização.", 409);
-        }
-      } else {
-        const u = await prisma.user.create({
-          data: {
-            name: data.name.trim(),
-            email,
-            passwordHash: await hashPassword(
-              randomBytes(24).toString("hex")
-            ),
-          },
-        });
-        userId = u.id;
-        createdUser = true;
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      userId = existing.id;
+      const already = await prisma.organizationMember.findFirst({
+        where: { organizationId: orgId, userId },
+      });
+      if (already) {
+        throw new AppError("EXISTS", "Este colaborador já pertence à organização.", 409);
       }
     } else {
-      // Sem e-mail: cria usuário de caixa com e-mail derivado (sem login real).
-      const base = slugify(data.name.trim()) || "colaborador";
       const u = await prisma.user.create({
         data: {
           name: data.name.trim(),
-          email: await uniqueDummyEmail(base),
+          email,
           passwordHash: await hashPassword(randomBytes(24).toString("hex")),
         },
       });
@@ -309,206 +293,6 @@ export async function addCollaborator(input: unknown) {
       },
     });
     return { id: member.id, createdUser };
-  });
-}
-
-function slugify(t: string) {
-  return t
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-async function uniqueDummyEmail(base: string): Promise<string> {
-  const candidate = `${base}@sem-email.teamflow`;
-  const exists = await prisma.user.findUnique({ where: { email: candidate } });
-  if (!exists) return candidate;
-  for (let i = 1; i < 100; i++) {
-    const next = `${base}-${i}@sem-email.teamflow`;
-    const used = await prisma.user.findUnique({ where: { email: next } });
-    if (!used) return next;
-  }
-  return `${base}-${randomBytes(3).toString("hex")}@sem-email.teamflow`;
-}
-
-export async function updateCollaborator(input: { id: string } & Record<string, unknown>) {
-  return handleAction(async () => {
-    const { orgId, session, membership } = await getContext();
-    guardPerm(membership, "users.write");
-    const data = collaboratorSchema.parse(input);
-    const member = await prisma.organizationMember.findFirst({
-      where: { id: input.id, organizationId: orgId },
-    });
-    if (!member) throw new AppError("NOT_FOUND", "Colaborador não encontrado.", 404);
-    const role = (
-      data.permission && ["OWNER", "ADMIN", "MANAGER", "LEADER", "MEMBER"].includes(data.permission)
-        ? data.permission
-        : member.role
-    ) as "OWNER" | "ADMIN" | "MANAGER" | "LEADER" | "MEMBER";
-
-    // Impede MANAGER de promover para OWNER
-    guardManagerCannotPromoteToOwner(membership);
-
-    // Verifica se o ator pode mudar o papel para o target
-    if (data.permission && !canChangeMemberRole(membership, role)) {
-      throw new AppError("FORBIDDEN", "Você não pode alterar o papel deste colaborador.", 403);
-    }
-
-    if (data.permission) {
-      guardCanAssign(membership, role);
-      if (member.userId === session.sub && role !== member.role) {
-        throw new AppError("SELF_ROLE", "Você não pode alterar seu próprio papel por aqui.", 400);
-      }
-      if (member.role === "OWNER" && role !== "OWNER") {
-        if (membership.role !== "OWNER") {
-          throw new AppError("FORBIDDEN", "Somente o proprietário pode rebaixar um proprietário.", 403);
-        }
-        const owners = await prisma.organizationMember.count({
-          where: { organizationId: orgId, role: "OWNER" },
-        });
-        if (owners <= 1) {
-          throw new AppError("LAST_OWNER", "A organização precisa de ao menos um proprietário.", 400);
-        }
-      }
-    }
-
-    // Contagem de OWNERs para proteção do último
-    const ownersCount = await prisma.organizationMember.count({
-      where: { organizationId: orgId, role: "OWNER" },
-    });
-    guardLastOwnerProtection(membership, { owners: ownersCount });
-
-    await validateOrgReferences(orgId, {
-      members: [data.managerId],
-      departments: [data.departmentId],
-      teams: [data.teamId],
-    });
-
-    await prisma.organizationMember.update({
-      where: { id: member.id },
-      data: {
-        role,
-        jobTitle: data.jobTitle || role || member.jobTitle,
-        cpf: data.cpf || member.cpf,
-        phone: data.phone != null ? data.phone : member.phone,
-        departmentId: data.departmentId ?? member.departmentId,
-        managerId: data.managerId ?? member.managerId,
-        entryDate: data.entryDate ? new Date(data.entryDate) : member.entryDate,
-      },
-    });
-    await prisma.user.update({
-      where: { id: member.userId },
-      data: { name: data.name.trim() },
-      select: { id: true },
-    });
-    // Só mexe nas equipes quando o cliente informou teamId de forma explícita
-    // (undefined = não alterar; string/null = trocar/remover).
-    if (data.teamId !== undefined) {
-      await prisma.teamMember.deleteMany({ where: { memberId: member.id } });
-      if (data.teamId) {
-        await prisma.teamMember.create({
-          data: { teamId: data.teamId, memberId: member.id },
-        });
-      }
-    }
-    await logActivity({
-      action: "member.updated",
-      entity: "member",
-      entityId: member.id,
-      newData: {
-        name: data.name,
-      },
-    });
-    return ok({});
-  });
-}
-
-export async function removeCollaborator(id: string) {
-  return handleAction(async () => {
-    const { orgId, membership } = await getContext();
-    guardPerm(membership, "users.delete");
-    const member = await prisma.organizationMember.findFirst({
-      where: { id, organizationId: orgId },
-      include: { user: { select: { name: true } } },
-    });
-    if (!member) throw new AppError("NOT_FOUND", "Colaborador não encontrado.", 404);
-    if (member.id === membership.id) {
-      throw new AppError("SELF_REMOVE", "Você não pode remover a si mesmo.", 400);
-    }
-    if (membership.role !== "OWNER" && ROLE_ORDER[member.role] >= ROLE_ORDER[membership.role]) {
-      throw new AppError("FORBIDDEN", "Você não pode remover um colaborador com papel igual ou superior ao seu.", 403);
-    }
-    if (member.role === "OWNER") {
-      if (membership.role !== "OWNER") {
-        throw new AppError("FORBIDDEN", "Somente o proprietário pode remover um proprietário.", 403);
-      }
-      const owners = await prisma.organizationMember.count({
-        where: { organizationId: orgId, role: "OWNER" },
-      });
-      if (owners <= 1) {
-        throw new AppError("LAST_OWNER", "A organização precisa de ao menos um proprietário.", 400);
-      }
-    }
-    await prisma.organizationMember.delete({ where: { id: member.id } });
-    await logActivity({
-      action: "member.deleted",
-      entity: "member",
-      entityId: id,
-      newData: {
-        name: member.user.name,
-      },
-    });
-    return ok({});
-  });
-}
-
-export async function setMemberRole(input: { id: string; role: string }) {
-  return handleAction(async () => {
-    const { orgId, session, membership } = await getContext();
-    guardPerm(membership, "users.write");
-    const allowed = ["OWNER", "ADMIN", "MANAGER", "LEADER", "MEMBER"] as const;
-    if (!allowed.includes(input.role as (typeof allowed)[number])) {
-      throw new AppError("INVALID", "Papel inválido.", 400);
-    }
-    const role = input.role as (typeof allowed)[number];
-    const member = await prisma.organizationMember.findFirst({
-      where: { id: input.id, organizationId: orgId },
-    });
-    if (!member) throw new AppError("NOT_FOUND", "Colaborador não encontrado.", 404);
-    if (member.userId === session.sub && role !== member.role) {
-      throw new AppError("SELF_ROLE", "Altere seu próprio papel pela edição de perfil (apenas por um administrador).", 400);
-    }
-    // Impede MANAGER de promover para OWNER
-    guardManagerCannotPromoteToOwner(membership);
-    // Verifica se o ator pode mudar o papel para o target
-    if (!canChangeMemberRole(membership, role)) {
-      throw new AppError("FORBIDDEN", "Você não pode alterar o papel deste colaborador.", 403);
-    }
-    guardCanAssign(membership, role);
-    if (member.role === "OWNER" && role !== "OWNER") {
-      if (membership.role !== "OWNER") {
-        throw new AppError("FORBIDDEN", "Somente o proprietário pode rebaixar um proprietário.", 403);
-      }
-      const owners = await prisma.organizationMember.count({
-        where: { organizationId: orgId, role: "OWNER" },
-      });
-      if (owners <= 1) {
-        throw new AppError("LAST_OWNER", "A organização precisa de ao menos um proprietário.", 400);
-      }
-    }
-await prisma.organizationMember.update({
-   where: { id: member.id },
-   data: { role },
- });
-    await logActivity({
-      action: "member.role",
-      entity: "member",
-      entityId: member.id,
-      newData: { role },
-    });
     return ok({});
   });
 }
