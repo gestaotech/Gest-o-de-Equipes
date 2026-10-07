@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { getAppShellData } from "@/server/page-data";
-import { getOrgMembers } from "@/server/guards";
 import { prisma } from "@/lib/prisma";
 import { permits, RoleName } from "@/lib/rbac";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { TeammatesClient } from "./client";
+import { requireDataScope } from "@/server/scope";
+import { visibleMembersWhere, seesOrg } from "@/server/scope/rules";
 
 export const metadata: Metadata = { title: "Colaboradores" };
 
@@ -28,27 +29,43 @@ function getAllowedRoles(userRole: RoleName): { label: string; value: string }[]
       { label: "Membro", value: "MEMBER" },
     ];
   }
-  // LEADER e MEMBER: ninguém
+  // LEADER e MEMBER: ninguêm
   return [];
 }
 
 export default async function ColaboradoresPage() {
   const app = await getAppShellData();
+  const scope = await requireDataScope();
   const allowedRoles = getAllowedRoles(app.org.role);
+  const memberWhere = visibleMembersWhere(scope);
+
   const [members, teams, departments, managers] = await Promise.all([
-    getOrgMembers(app.org.id),
+    prisma.organizationMember.findMany({
+      where: memberWhere,
+      include: {
+        user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        department: { select: { id: true, name: true } },
+        manager: { include: { user: { select: { name: true } } } },
+        teamMembers: { include: { team: { select: { id: true, name: true } } } },
+      },
+      orderBy: [{ status: "asc" }, { joinedAt: "asc" }],
+    }),
     prisma.team.findMany({
-      where: { organizationId: app.org.id, archivedAt: null },
+      where: seesOrg(scope)
+        ? { organizationId: scope.orgId, archivedAt: null }
+        : { organizationId: scope.orgId, archivedAt: null, id: { in: scope.teamIds } },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
     prisma.department.findMany({
-      where: { organizationId: app.org.id, archivedAt: null },
+      where: seesOrg(scope)
+        ? { organizationId: scope.orgId, archivedAt: null }
+        : { organizationId: scope.orgId, archivedAt: null, members: { some: { id: scope.memberId } } },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
     prisma.organizationMember.findMany({
-      where: { organizationId: app.org.id },
+      where: memberWhere,
       select: {
         id: true,
         user: { select: { name: true } },

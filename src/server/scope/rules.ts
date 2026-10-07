@@ -68,8 +68,8 @@ export function dataScopeFrom(input: {
   };
 }
 
-const seesOrg = (s: DataScope) => s.level === "ORG";
-const isLead = (s: DataScope) => s.level === "LEAD";
+export const seesOrg = (s: DataScope) => s.level === "ORG";
+export const isLead = (s: DataScope) => s.level === "LEAD";
 
 const NEVER = "__tf_never_match__" as const;
 
