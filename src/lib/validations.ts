@@ -33,6 +33,18 @@ export const resetSchema = z
     path: ["confirm"],
   });
 
+/** Primeiro acesso — colaborador cria a própria senha usando o token de ativação. */
+export const firstAccessSchema = z
+  .object({
+    token: z.string().min(1, "Link inválido."),
+    password: pass,
+    confirm: z.string(),
+  })
+  .refine((d) => d.password === d.confirm, {
+    message: "As senhas não coincidem.",
+    path: ["confirm"],
+  });
+
 export const orgSchema = z.object({
   name: z.string().min(2, "Informe o nome da empresa.").max(100).trim(),
   slug: z
@@ -129,8 +141,11 @@ export const collaboratorSchema = z.object({
   name: z.string().min(2, "Informe o nome.").max(80).trim(),
   cpf: z
     .string()
-    .regex(/^\d{3}\.\d{3}\.\d{3}-\d{2}$/, "CPF inválido.")
+    .optional()
+    .nullable()
     .refine((cpf) => {
+      // CPF é opcional; quando informado, precisa ser válido.
+      if (!cpf) return true;
       // Validação simples de CPF (todos dígitos iguais rejeitados)
       const cleaned = cpf.replace(/\D/g, "");
       if (/^(\d)\1+$/.test(cleaned)) return false;

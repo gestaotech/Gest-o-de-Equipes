@@ -87,6 +87,7 @@ export function TeammatesClient({
   const [dialog, setDialog] = useState<{ mode: "add" | "edit"; form: Form; id?: string } | null>(null);
   const [deleting, setDeleting] = useState<Member | null>(null);
   const [busy, setBusy] = useState(false);
+  const [devLink, setDevLink] = useState<string | null>(null);
 
   function openEdit(m: Member) {
     setDialog({
@@ -124,9 +125,16 @@ export function TeammatesClient({
     const res =
       (dialog.mode === "add"
         ? await addCollaborator(payload)
-        : await addCollaborator({ id: dialog.id!, ...payload })) as ActionResult;
+        : await addCollaborator({ id: dialog.id!, ...payload })) as ActionResult<{
+        id: string;
+        createdUser: boolean;
+        firstAccessUrl: string | null;
+      }>;
     setBusy(false);
     if (res.success) {
+      if (dialog.mode === "add" && res.data?.firstAccessUrl) {
+        setDevLink(res.data.firstAccessUrl);
+      }
       toast(dialog.mode === "add" ? "Colaborador adicionado!" : "Colaborador atualizado.");
       setDialog(null);
       router.refresh();
@@ -165,6 +173,32 @@ export function TeammatesClient({
           )
         }
       />
+
+      {devLink && (
+        <div className="rounded-xl border border-dashed bg-muted/50 px-4 py-3 text-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-medium">Link de primeiro acesso (modo dev)</p>
+              <p className="text-xs text-muted-foreground">
+                Em produção o token é enviado por e-mail. Copie e envie ao colaborador:
+              </p>
+              <a href={devLink} className="mt-1 block break-all font-mono text-xs text-blue-600 underline">
+                {devLink}
+              </a>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                navigator.clipboard?.writeText(devLink);
+                toast("Link copiado.");
+              }}
+            >
+              Copiar
+            </Button>
+          </div>
+        </div>
+      )}
 
       {members.length === 0 ? (
         <EmptyState

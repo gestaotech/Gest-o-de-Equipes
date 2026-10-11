@@ -18,10 +18,12 @@ import {
   loginSchema,
   forgotSchema,
   resetSchema,
+  firstAccessSchema,
   accountUpdateSchema,
 } from "@/lib/validations";
 import { ensureCatalogs } from "@/lib/catalog";
 import { logActivity } from "@/server/activity";
+import { consumeAccountToken } from "@/server/account-token";
 
 const resetSecret = () => {
   const s = process.env.AUTH_SECRET;
@@ -158,6 +160,29 @@ export async function resetPassword(input: unknown) {
       data: { passwordHash: await hashPassword(data.password) },
     });
     // Recuperação de senha invalida todas as sessões do usuário (token antigo morre).
+    await prisma.userSession.updateMany({
+      where: { userId: user.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return ok({});
+  });
+}
+
+/**
+ * Primeiro acesso: o colaborador define a própria senha a partir do token
+ * de ativação gerado no cadastro. O admin nunca conhece/define essa senha.
+ * Consome o token (uso único) e encerra sessões anteriores por segurança.
+ */
+export async function completeFirstAccess(input: unknown) {
+  return handleAction(async () => {
+    const data = firstAccessSchema.parse(input);
+    const { userId } = await consumeAccountToken(data.token, "FIRST_ACCESS");
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new AppError("INVALID_TOKEN", "Link inválido ou expirado.", 400);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: await hashPassword(data.password) },
+    });
     await prisma.userSession.updateMany({
       where: { userId: user.id, revokedAt: null },
       data: { revokedAt: new Date() },

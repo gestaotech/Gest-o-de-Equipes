@@ -3,6 +3,8 @@ import {
   profileSchema,
   passwordChangeSchema,
   signUpSchema,
+  collaboratorSchema,
+  firstAccessSchema,
 } from "@/lib/validations";
 
 describe("profileSchema (anti mass-assignment)", () => {
@@ -107,5 +109,76 @@ describe("política de senha (cadastro)", () => {
         password: "123456",
       }).success
     ).toBe(true);
+  });
+});
+
+describe("collaboratorSchema (e-mail obrigatório)", () => {
+  it("rejeita colaborador sem e-mail", () => {
+    const res = collaboratorSchema.safeParse({ name: "Maria Silva" });
+    expect(res.success).toBe(false);
+  });
+
+  it("rejeita e-mail inválido", () => {
+    const res = collaboratorSchema.safeParse({
+      name: "Maria Silva",
+      email: "nao-e-email",
+    });
+    expect(res.success).toBe(false);
+  });
+
+  it("aceita colaborador com e-mail válido e sem CPF", () => {
+    const res = collaboratorSchema.safeParse({
+      name: "Maria Silva",
+      email: "Maria@Empresa.com",
+    });
+    expect(res.success).toBe(true);
+    if (res.success) expect(res.data.email).toBe("maria@empresa.com");
+  });
+
+  it("rejeita CPF inválido quando informado", () => {
+    const res = collaboratorSchema.safeParse({
+      name: "Maria Silva",
+      email: "maria@empresa.com",
+      cpf: "111.111.111-11",
+    });
+    expect(res.success).toBe(false);
+  });
+});
+
+describe("firstAccessSchema", () => {
+  it("aceita token + senha confirmada", () => {
+    const res = firstAccessSchema.safeParse({
+      token: "abc",
+      password: "minha-senha",
+      confirm: "minha-senha",
+    });
+    expect(res.success).toBe(true);
+  });
+
+  it("rejeita confirmação divergente", () => {
+    const res = firstAccessSchema.safeParse({
+      token: "abc",
+      password: "minha-senha",
+      confirm: "outra",
+    });
+    expect(res.success).toBe(false);
+  });
+
+  it("rejeita senha curta", () => {
+    const res = firstAccessSchema.safeParse({
+      token: "abc",
+      password: "123",
+      confirm: "123",
+    });
+    expect(res.success).toBe(false);
+  });
+
+  it("rejeita token vazio", () => {
+    const res = firstAccessSchema.safeParse({
+      token: "",
+      password: "minha-senha",
+      confirm: "minha-senha",
+    });
+    expect(res.success).toBe(false);
   });
 });

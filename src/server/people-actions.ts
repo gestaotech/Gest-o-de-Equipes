@@ -20,7 +20,7 @@ import {
 } from "@/server/guards";
 import { logActivity } from "@/server/activity";
 import { hashPassword } from "@/lib/auth";
-import { ROLE_ORDER } from "@/lib/rbac";
+import { issueAccountToken } from "@/server/account-token";
 
 const normalizeEmail = (e: string) => e.trim().toLowerCase();
 
@@ -216,39 +216,17 @@ export async function addCollaborator(input: unknown) {
         : "MEMBER"
     ) as "OWNER" | "ADMIN" | "MANAGER" | "LEADER" | "MEMBER";
 
-    // Impede MANAGER de promover para OWNER
-    guardManagerCannotPromoteToOwner(membership);
+    // MANAGER não pode criar/promover OWNER (canCreateMember cobre os demais casos)
+    if (role === "OWNER") {
+      guardManagerCannotPromoteToOwner(membership);
+    }
 
     // Verifica se o ator pode criar um membro com este role
     if (!canCreateMember(membership, role)) {
       throw new AppError("FORBIDDEN", "Você não pode cadastrar colaboradores com este cargo.", 403);
     }
 
-    let userId: string;
-    let createdUser = false;
-
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) {
-      userId = existing.id;
-      const already = await prisma.organizationMember.findFirst({
-        where: { organizationId: orgId, userId },
-      });
-      if (already) {
-        throw new AppError("EXISTS", "Este colaborador já pertence à organização.", 409);
-      }
-    } else {
-      const u = await prisma.user.create({
-        data: {
-          name: data.name.trim(),
-          email,
-          passwordHash: await hashPassword(randomBytes(24).toString("hex")),
-        },
-      });
-      userId = u.id;
-      createdUser = true;
-    }
-
-    // Valida referências de organização
+    // Referências precisam pertencer à organização (fail-fast antes de criar).
     await validateOrgReferences(orgId, {
       members: [data.managerId],
       departments: [data.departmentId],
@@ -261,25 +239,64 @@ export async function addCollaborator(input: unknown) {
     });
     guardLastOwnerProtection(membership, { owners: ownersCount });
 
-    const member = await prisma.organizationMember.create({
-      data: {
-        organizationId: orgId,
-        userId,
-        role,
-        jobTitle: data.jobTitle || role || null,
-        cpf: data.cpf || null,
-        phone: data.phone || null,
-        departmentId: data.departmentId || null,
-        managerId: data.managerId || null,
-        entryDate: data.entryDate ? new Date(data.entryDate) : null,
-      },
-    });
-
-    if (data.teamId) {
-      await prisma.teamMember.create({
-        data: { teamId: data.teamId, memberId: member.id },
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      const already = await prisma.organizationMember.findFirst({
+        where: { organizationId: orgId, userId: existing.id },
       });
+      if (already) {
+        throw new AppError("EXISTS", "Este colaborador já pertence à organização.", 409);
+      }
     }
+
+    // Usuário + membership + token de primeiro acesso na MESMA transação.
+    const { member, createdUser, rawToken } = await prisma.$transaction(async (tx) => {
+      let userId: string;
+      let created = false;
+
+      if (existing) {
+        userId = existing.id;
+      } else {
+        const u = await tx.user.create({
+          data: {
+            name: data.name.trim(),
+            email,
+            // Senha inutilizável: o admin NÃO define a senha do colaborador.
+            // Ele cria a própria senha no primeiro acesso (token de ativação).
+            passwordHash: await hashPassword(randomBytes(48).toString("hex")),
+          },
+        });
+        userId = u.id;
+        created = true;
+      }
+
+      const createdMember = await tx.organizationMember.create({
+        data: {
+          organizationId: orgId,
+          userId,
+          role,
+          jobTitle: data.jobTitle || role || null,
+          cpf: data.cpf || null,
+          phone: data.phone || null,
+          departmentId: data.departmentId || null,
+          managerId: data.managerId || null,
+          entryDate: data.entryDate ? new Date(data.entryDate) : null,
+        },
+      });
+
+      if (data.teamId) {
+        await tx.teamMember.create({
+          data: { teamId: data.teamId, memberId: createdMember.id },
+        });
+      }
+
+      // Só usuários recém-criados precisam ativar a conta.
+      const token = created
+        ? await issueAccountToken(userId, "FIRST_ACCESS", tx)
+        : null;
+
+      return { member: createdMember, createdUser: created, rawToken: token };
+    });
 
     await logActivity({
       action: "member.created",
@@ -289,10 +306,16 @@ export async function addCollaborator(input: unknown) {
         name: data.name,
         role,
         created: createdUser ? "user+member" : "member",
-        cpf: data.cpf ? "normalized" : null,
       },
     });
-    return { id: member.id, createdUser };
-    return ok({});
+
+    // Em produção o link NUNCA é devolvido (não há SMTP configurado).
+    // A entrega do token por e-mail fica como dependência pendente.
+    const safeReturn = process.env.NODE_ENV !== "production";
+    return {
+      id: member.id,
+      createdUser,
+      firstAccessUrl: safeReturn && rawToken ? `/primeiro-acesso?t=${rawToken}` : null,
+    };
   });
 }

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 const PROTECTED = ["/dashboard", "/app", "/onboarding", "/criar-org", "/profile"];
-const AUTH_PAGES = ["/login", "/cadastro", "/recuperar", "/resetar-senha"];
+const AUTH_PAGES = ["/login", "/cadastro", "/recuperar", "/resetar-senha", "/primeiro-acesso"];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -33,5 +33,6 @@ export const config = {
     "/cadastro",
     "/recuperar",
     "/resetar-senha",
+    "/primeiro-acesso",
   ],
 };

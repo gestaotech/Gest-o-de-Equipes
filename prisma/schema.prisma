@@ -79,6 +79,11 @@ enum SubscriptionStatus {
   REFUNDED
 }
 
+enum AccountTokenType {
+  FIRST_ACCESS
+  PASSWORD_RESET
+}
+
 // ------------------------------------------------------------
 // USUÁRIOS E ORGANIZAÇÕES (multi-tenancy)
 // ------------------------------------------------------------
@@ -102,6 +107,7 @@ model User {
   announcements Announcement[]
   activityLogs ActivityLog[]
   sessions     UserSession[]
+  accountTokens AccountToken[]
   preferences  UserPreference?
 
   @@map("users")
@@ -152,6 +158,28 @@ model UserSession {
 
   @@index([userId])
   @@map("user_sessions")
+}
+
+// ------------------------------------------------------------
+// TOKENS DE CONTA (primeiro acesso / recuperação de senha)
+// Só o HASH do token é persistido; nunca o valor em texto puro.
+// Uso único (usedAt) e com validade (expiresAt).
+// ------------------------------------------------------------
+
+model AccountToken {
+  id        String           @id @default(cuid())
+  userId    String
+  tokenHash String           @unique
+  type      AccountTokenType
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, type, usedAt])
+  @@map("account_tokens")
 }
 
 model Organization {
