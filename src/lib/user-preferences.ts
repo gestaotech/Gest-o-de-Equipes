@@ -13,6 +13,18 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
   announcementNotifications: true,
 };
 
+export type DashboardWidget = "kpis" | "flow" | "tasks" | "projects" | "events" | "activity" | "status";
+
+export type DashboardLayout = {
+  widgets: DashboardWidget[];
+  order: DashboardWidget[];
+};
+
+export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayout = {
+  widgets: ["kpis", "flow", "tasks", "projects", "events", "activity", "status"],
+  order: ["kpis", "flow", "tasks", "projects", "events", "activity", "status"],
+};
+
 /** IANA curadas usadas na UI do perfil. */
 export const TIMEZONES: { value: string; label: string }[] = [
   { value: "America/Sao_Paulo", label: "Brasília · America/Sao_Paulo" },

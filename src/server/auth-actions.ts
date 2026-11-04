@@ -1,6 +1,5 @@
 "use server";
 
-import { SignJWT, jwtVerify } from "jose";
 import { cookies, headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import {
@@ -23,13 +22,8 @@ import {
 } from "@/lib/validations";
 import { ensureCatalogs } from "@/lib/catalog";
 import { logActivity } from "@/server/activity";
-import { consumeAccountToken } from "@/server/account-token";
-
-const resetSecret = () => {
-  const s = process.env.AUTH_SECRET;
-  if (!s) throw new Error("AUTH_SECRET não configurado.");
-  return new TextEncoder().encode(s);
-};
+import { issueAccountToken, consumeAccountToken } from "@/server/account-token";
+import { sendPasswordResetEmail } from "@/lib/email";
 
 const normalizeEmail = (e: string) => e.trim().toLowerCase();
 
@@ -117,53 +111,55 @@ export async function requestReset(input: unknown) {
   return handleAction(async () => {
     const data = forgotSchema.parse(input);
     const email = normalizeEmail(data.email);
-    const user = await prisma.user.findUnique({ where: { email } });
-    // Sempre responde "sent" do mesmo jeito para não vazar e-mails cadastrados.
-    // Em produção o token NUNCA é devolvido pela resposta (não há SMTP configurado,
-    // então a recuperação fica restrita ao ambiente local de desenvolvimento).
-    const safeReturn =
-      process.env.NODE_ENV === "production" ? false : Boolean(user);
-    const token =
-      process.env.NODE_ENV === "production"
-        ? null
-        : await new SignJWT({ type: "password_reset" })
-            .setProtectedHeader({ alg: "HS256" })
-            .setSubject(user?.id ?? "x")
-            .setIssuedAt()
-            .setExpirationTime("1h")
-            .sign(resetSecret());
-    return {
-      sent: Boolean(user),
-      resetToken: safeReturn ? token : null,
-      resetUrl: safeReturn ? `/resetar-senha?t=${token}` : null,
-    };
+    
+    // Busca usuário por e-mail
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true },
+    });
+    
+    // Sempre retorna sucesso para não vazar existência de e-mail (proteção contra enumeração)
+    if (!user) {
+      return ok({ sent: true });
+    }
+    
+    // Gera token persistente (AccountToken) para redefinição de senha
+    // Isso automaticamente invalida quaisquer tokens anteriores do mesmo tipo
+    const rawToken = await issueAccountToken(user.id, 'PASSWORD_RESET');
+    
+    // Envia e-mail com link de redefinição
+    // Se o provedor não estiver configurado, o token é registrado em log (desenvolvimento)
+    // ou apenas documentado (produção), sem simular sucesso
+    await sendPasswordResetEmail(email, rawToken);
+    
+    return ok({ sent: true });
   });
 }
 
 export async function resetPassword(input: unknown) {
   return handleAction(async () => {
     const data = resetSchema.parse(input);
-    let payload: { sub: string; type?: string };
-    try {
-      const { payload: p } = await jwtVerify(data.token, resetSecret());
-      payload = p as { sub: string; type?: string };
-    } catch {
-      throw new AppError("INVALID_TOKEN", "Link inválido ou expirado.", 400);
-    }
-    if (payload.type !== "password_reset") {
-      throw new AppError("INVALID_TOKEN", "Link inválido ou expirado.", 400);
-    }
-    const user = await prisma.user.findUnique({ where: { id: payload.sub } });
-    if (!user) throw new AppError("INVALID_TOKEN", "Usuário não encontrado.", 404);
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { passwordHash: await hashPassword(data.password) },
+    
+    // Usa transação atômica para garantir que o token só seja consumido
+    // se a senha for alterada com sucesso. Se qualquer etapa falhar,
+    // o token não é consumido e pode ser reutilizado.
+    await prisma.$transaction(async (tx) => {
+      // Consome o token de redefinição (uso único, dentro da transação)
+      const { userId } = await consumeAccountToken(data.token, 'PASSWORD_RESET', tx);
+      
+      // Atualiza a senha do usuário
+      await tx.user.update({
+        where: { id: userId },
+        data: { passwordHash: await hashPassword(data.password) },
+      });
+      
+      // Revoga todas as sessões ativas do usuário (força novo login)
+      await tx.userSession.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
     });
-    // Recuperação de senha invalida todas as sessões do usuário (token antigo morre).
-    await prisma.userSession.updateMany({
-      where: { userId: user.id, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
+    
     return ok({});
   });
 }
@@ -171,22 +167,42 @@ export async function resetPassword(input: unknown) {
 /**
  * Primeiro acesso: o colaborador define a própria senha a partir do token
  * de ativação gerado no cadastro. O admin nunca conhece/define essa senha.
- * Consome o token (uso único) e encerra sessões anteriores por segurança.
+ *
+ * Usa transação atômica para garantir que:
+ * 1. O token só seja consumido se a senha for alterada com sucesso
+ * 2. Se qualquer etapa falhar, o token não é consumido e pode ser reutilizado
+ * 3. Revogação de sessões acontece na mesma transação
  */
 export async function completeFirstAccess(input: unknown) {
   return handleAction(async () => {
     const data = firstAccessSchema.parse(input);
-    const { userId } = await consumeAccountToken(data.token, "FIRST_ACCESS");
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new AppError("INVALID_TOKEN", "Link inválido ou expirado.", 400);
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { passwordHash: await hashPassword(data.password) },
+    
+    // Usa transação atômica para garantir que o token só seja consumido
+    // se a senha for alterada com sucesso. Se qualquer etapa falhar,
+    // o token não é consumido e pode ser reutilizado.
+    await prisma.$transaction(async (tx) => {
+      // Consome o token de primeiro acesso (uso único, dentro da transação)
+      const { userId } = await consumeAccountToken(data.token, 'FIRST_ACCESS', tx);
+      
+      // Verifica se o usuário existe
+      const user = await tx.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        throw new AppError("NOT_FOUND", "Usuário não encontrado.", 404);
+      }
+      
+      // Atualiza a senha do usuário
+      await tx.user.update({
+        where: { id: userId },
+        data: { passwordHash: await hashPassword(data.password) },
+      });
+      
+      // Revoga todas as sessões ativas (segurança, embora improvável ter sessões ainda)
+      await tx.userSession.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
     });
-    await prisma.userSession.updateMany({
-      where: { userId: user.id, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
+    
     return ok({});
   });
 }

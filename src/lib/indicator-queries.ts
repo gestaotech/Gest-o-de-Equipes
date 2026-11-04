@@ -633,3 +633,216 @@ export async function getOrgSummary(scope: IndicatorScope, range: DateRange | nu
     goals: { total: goalTotals, inProgress, concluded: goalConcluded, atRisk },
   };
 }
+
+// ------------------------------------------------------------
+// NOVOS INDICADORES AVANÇADOS (Fase 7)
+// ------------------------------------------------------------
+
+export type ProductivityMetric = {
+  memberId: string;
+  memberName: string;
+  tasksCompleted: number;
+  tasksCreated: number;
+  avgDaysToComplete: number | null;
+  onTimeRate: number | null;
+};
+
+/**
+ * Produtividade por colaborador dentro do escopo.
+ * Retorna tarefas concluídas, criadas, tempo médio para concluir e taxa de entrega no prazo.
+ */
+export async function getProductivityByMember(
+  scope: IndicatorScope,
+  range: DateRange | null
+): Promise<ProductivityMetric[]> {
+  const [members, raw] = await Promise.all([
+    prisma.organizationMember.findMany({
+      where: scope.restrict ? visibleMembersWhere(scope.restrict) : { organizationId: scope.orgId },
+      include: { user: { select: { name: true } } },
+      orderBy: { joinedAt: "asc" },
+    }),
+    (prisma.$queryRaw as unknown as (args: unknown) => Promise<unknown>)(`
+      SELECT ta."memberId" AS id,
+        count(*) FILTER (WHERE tk."status" = 'DONE')::int AS completed,
+        count(*)::int AS created,
+        round(avg(EXTRACT(EPOCH FROM (tk."completedAt" - tk."createdAt")) / 86400.0)::numeric, 2)::text AS avg_days,
+        round(
+          100.0 * count(*) FILTER (WHERE tk."status" = 'DONE' AND tk."dueDate" >= tk."completedAt")::float
+          / nullif(count(*) FILTER (WHERE tk."status" = 'DONE'), 0)::float, 2
+        )::text AS ontime_rate
+      FROM task_assignees ta
+      JOIN tasks tk ON tk.id = ta."taskId"
+      WHERE ${Prisma.join(taskSqlConditions(scope, range, "tk", "createdAt"), " AND ")}
+      GROUP BY ta."memberId"
+    `) as Promise<{
+      id: string;
+      completed: number;
+      created: number;
+      avg_days: string;
+      ontime_rate: string;
+    }[]>,
+  ]);
+  const byId = new Map(raw.map((r) => [r.id, r]));
+  return members.map((m) => {
+    const r = byId.get(m.id);
+    return {
+      memberId: m.id,
+      memberName: m.user.name,
+      tasksCompleted: r?.completed ?? 0,
+      tasksCreated: r?.created ?? 0,
+      avgDaysToComplete: r?.avg_days ? Number(r.avg_days) : null,
+      onTimeRate: r?.ontime_rate ? Number(r.ontime_rate) : null,
+    };
+  });
+}
+
+export type DelayTrend = {
+  bucket: string;
+  overdueCount: number;
+};
+
+/**
+ * Tendência de atraso ao longo do tempo (tarefas que passaram a ficar atrasadas em cada bucket).
+ */
+export async function getDelayTrend(
+  scope: IndicatorScope,
+  granularity: EvolutionGranularity,
+  range: DateRange | null
+): Promise<DelayTrend[]> {
+  if (!range?.from) return [];
+  const conditions = [
+    Prisma.sql`tk."organizationId" = ${scope.orgId}`,
+    Prisma.sql`tk."status" <> 'DONE'`,
+    Prisma.sql`tk."dueDate" IS NOT NULL`,
+    Prisma.sql`tk."dueDate" < ${new Date()}`,
+  ];
+  if (scope.restrict) {
+    const vis = taskVisibilitySql(scope.restrict, "tk");
+    if (vis) conditions.push(vis);
+  }
+  if (range.from) {
+    conditions.push(
+      range.to
+        ? Prisma.sql`tk."dueDate" >= ${range.from} AND tk."dueDate" < ${range.to}`
+        : Prisma.sql`tk."dueDate" >= ${range.from}`
+    );
+  }
+  const whereSql = Prisma.join(conditions, " AND ");
+  const rows = await prisma.$queryRaw<{ bucket: string; overdueCount: number }[]>`
+    SELECT ${bucketExpr(granularity, "dueDate")} AS bucket, count(*)::int AS overdue_count
+    FROM tasks tk
+    WHERE ${whereSql}
+    GROUP BY bucket
+    ORDER BY bucket ASC
+  `;
+  return rows.map((r) => ({ bucket: r.bucket, overdueCount: Number(r.overdueCount) }));
+}
+
+export type GoalHealthMetric = {
+  total: number;
+  healthy: number;
+  atRisk: number;
+  critical: number;
+};
+
+/**
+ * Saúde das metas: saudável (progresso >= 80%), em risco (50-79%), crítica (< 50%).
+ */
+export async function getGoalHealth(scope: IndicatorScope): Promise<GoalHealthMetric> {
+  const where = goalWhere(scope);
+  const goals = await prisma.goal.findMany({
+    where,
+    select: { status: true, progress: true, dueDate: true },
+  });
+  let healthy = 0;
+  let atRisk = 0;
+  let critical = 0;
+  for (const g of goals) {
+    if (g.status === "CONCLUIDO") {
+      healthy++;
+    } else if (g.progress >= 80) {
+      healthy++;
+    } else if (g.progress >= 50) {
+      atRisk++;
+    } else {
+      critical++;
+    }
+  }
+  return {
+    total: goals.length,
+    healthy,
+    atRisk,
+    critical,
+  };
+}
+
+export type ProjectHealthMetric = {
+  total: number;
+  onTrack: number;
+  atRisk: number;
+  delayed: number;
+};
+
+/**
+ * Saúde dos projetos: no prazo (progresso >= 80%), em risco (50-79%), atrasado (< 50% ou vencido).
+ */
+export async function getProjectHealth(scope: IndicatorScope): Promise<ProjectHealthMetric> {
+  const where = buildProjectWhere(scope, null);
+  const projects = await prisma.project.findMany({
+    where,
+    select: { status: true, progress: true, dueDate: true },
+  });
+  let onTrack = 0;
+  let atRisk = 0;
+  let delayed = 0;
+  for (const p of projects) {
+    if (p.status === "CONCLUIDO") {
+      onTrack++;
+    } else if (p.progress >= 80) {
+      onTrack++;
+    } else if (p.progress >= 50) {
+      atRisk++;
+    } else {
+      delayed++;
+    }
+  }
+  return {
+    total: projects.length,
+    onTrack,
+    atRisk,
+    delayed,
+  };
+}
+
+// ------------------------------------------------------------
+// RESUMO EXPANDIDO (Fase 7)
+// ------------------------------------------------------------
+
+export type ExpandedOrgSummary = OrgSummary & {
+  productivity: ProductivityMetric[];
+  goalHealth: GoalHealthMetric;
+  projectHealth: ProjectHealthMetric;
+  delayTrend: DelayTrend[];
+};
+
+export async function getExpandedOrgSummary(
+  scope: IndicatorScope,
+  range: DateRange | null,
+  granularity: EvolutionGranularity = "week"
+): Promise<ExpandedOrgSummary> {
+  const [base, productivity, goalHealth, projectHealth, delayTrend] =
+    await Promise.all([
+      getOrgSummary(scope, range),
+      getProductivityByMember(scope, range),
+      getGoalHealth(scope),
+      getProjectHealth(scope),
+      getDelayTrend(scope, granularity, range),
+    ]);
+  return {
+    ...base,
+    productivity,
+    goalHealth,
+    projectHealth,
+    delayTrend,
+  };
+}

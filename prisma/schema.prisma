@@ -127,6 +127,7 @@ model UserPreference {
   projectNotifications  Boolean  @default(true)
   goalNotifications     Boolean  @default(true)
   announcementNotifications Boolean @default(true)
+  dashboardConfig  Json?      @default("{}")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -158,6 +159,24 @@ model UserSession {
 
   @@index([userId])
   @@map("user_sessions")
+}
+
+// ------------------------------------------------------------
+// AUTENTICAÇÃO DE DOIS FATORES (2FA)
+// ------------------------------------------------------------
+
+model UserTwoFactor {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  enabled       Boolean  @default(false)
+  secret        String   // base32 secreto TOTP
+  backupCodes   String   // JSON array de códigos de backup
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_two_factor")
 }
 
 // ------------------------------------------------------------
@@ -617,10 +636,36 @@ model Event {
   team     Team?    @relation(fields: [teamId], references: [id], onDelete: SetNull)
   project  Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
   task     Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  participants EventParticipant[]
 
   @@index([organizationId])
   @@index([startsAt])
   @@map("events")
+}
+
+enum ParticipantStatus {
+  PENDING
+  CONFIRMED
+  DECLINED
+}
+
+model EventParticipant {
+  id         String   @id @default(cuid())
+  eventId    String
+  userId     String
+  status     ParticipantStatus @default(PENDING)
+  respondedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  event   Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
+  @@index([status])
+  @@map("event_participants")
 }
 
 // ------------------------------------------------------------
@@ -779,6 +824,7 @@ model Integration {
   createdBy    OrganizationMember? @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
   @@unique([organizationId, provider])
+  @@index([organizationId])
   @@map("integrations")
 }
 

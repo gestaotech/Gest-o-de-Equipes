@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { Toaster } from "@/components/ui/toast";
+import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
 const inter = Inter({
@@ -62,7 +63,9 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" className={inter.variable}>
       <body className="bg-background text-foreground antialiased">
-        {children}
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
         <Toaster />
       </body>
     </html>

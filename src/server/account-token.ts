@@ -45,22 +45,26 @@ export async function issueAccountToken(
  * Consome um token de conta: valida existência, tipo, validade e uso único,
  * marcando-o como usado. Lança erro GENÉRICO (sem vazar detalhes) quando
  * o link for inválido, expirado ou já utilizado.
+ *
+ * Aceita um client transacional opcional para garantir atomicidade em operações
+ * que dependem do consumo do token (ex: alteração de senha).
  */
 export async function consumeAccountToken(
   rawToken: string,
-  type: AccountTokenType
+  type: AccountTokenType,
+  client: Client = prisma
 ): Promise<{ userId: string }> {
   if (!rawToken) {
     throw new AppError("INVALID_TOKEN", "Link inválido ou expirado.", 400);
   }
-  const token = await prisma.accountToken.findUnique({
+  const token = await client.accountToken.findUnique({
     where: { tokenHash: hashAccountToken(rawToken) },
   });
   if (!token || token.type !== type || !isTokenUsable(token)) {
     throw new AppError("INVALID_TOKEN", "Link inválido ou expirado.", 400);
   }
   // Marcação condicional: garante uso único mesmo sob concorrência.
-  const consumed = await prisma.accountToken.updateMany({
+  const consumed = await client.accountToken.updateMany({
     where: { id: token.id, usedAt: null },
     data: { usedAt: new Date() },
   });
