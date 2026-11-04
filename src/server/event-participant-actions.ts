@@ -47,9 +47,7 @@ export async function joinEvent(input: { eventId: string }) {
       action: "event.joined",
       entity: "event",
       entityId: eventId,
-      userId: session.sub,
-      organizationId: scope.orgId,
-      newData: { eventId, userId: session.sub, status: "PENDING" },
+      newData: { eventId, status: "PENDING" },
     });
 
     return ok({ participant });
@@ -87,9 +85,7 @@ export async function leaveEvent(input: { eventId: string }) {
       action: "event.left",
       entity: "event",
       entityId: eventId,
-      userId: session.sub,
-      organizationId: scope.orgId,
-      newData: { eventId, userId: session.sub },
+      newData: { eventId },
     });
 
     return ok({});
@@ -134,8 +130,6 @@ export async function updateParticipantStatus(input: {
       action: "event.participant.updated",
       entity: "event",
       entityId: eventId,
-      userId: session.sub,
-      organizationId: scope.orgId,
       newData: { eventId, participantUserId: userId, status },
     });
 

@@ -211,7 +211,7 @@ function taskVisibilitySql(s: DataScope, alias: string): Prisma.Sql | null {
  * "createdAt" para tarefas criadas, "completedAt" para tarefas concluídas.
  * São conceitos distintos e NÃO devem ser misturados.
  */
-type TaskDateColumn = "createdAt" | "completedAt";
+type TaskDateColumn = "createdAt" | "completedAt" | "dueDate";
 
 /** Condições SQL de tarefa. `dateColumn` define a coluna do filtro de período. */
 export function taskSqlConditions(
@@ -790,18 +790,21 @@ export async function getProjectHealth(scope: IndicatorScope): Promise<ProjectHe
   const where = buildProjectWhere(scope, null);
   const projects = await prisma.project.findMany({
     where,
-    select: { status: true, progress: true, dueDate: true },
+    select: { status: true, dueDate: true },
   });
   let onTrack = 0;
   let atRisk = 0;
   let delayed = 0;
+  const now = new Date();
   for (const p of projects) {
     if (p.status === "CONCLUIDO") {
       onTrack++;
-    } else if (p.progress >= 80) {
-      onTrack++;
-    } else if (p.progress >= 50) {
-      atRisk++;
+    } else if (p.status === "EM_ANDAMENTO") {
+      if (p.dueDate && p.dueDate < now) {
+        delayed++;
+      } else {
+        onTrack++;
+      }
     } else {
       delayed++;
     }

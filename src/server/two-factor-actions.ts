@@ -5,6 +5,28 @@ import { handleAction, AppError, ok } from "@/lib/errors";
 import { requireSessionApi } from "@/lib/auth";
 import { createHash, randomBytes } from "crypto";
 
+// Tabela Base32 (RFC 4648)
+const BASE32_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+function base32Decode(input: string): Uint8Array {
+  const clean = input.replace(/[^A-Z2-7]/g, "").toUpperCase();
+  let bits = 0;
+  let value = 0;
+  const output: number[] = [];
+
+  for (let i = 0; i < clean.length; i++) {
+    const idx = BASE32_CHARS.indexOf(clean[i]);
+    if (idx === -1) continue;
+    value = (value << 5) | idx;
+    bits += 5;
+    if (bits >= 8) {
+      output.push((value >> (bits - 8)) & 0xff);
+      bits -= 8;
+    }
+  }
+  return new Uint8Array(output);
+}
+
 /**
  * Gera um segredo base32 para TOTP (Google Authenticator, Authy, etc.)
  */
@@ -35,14 +57,14 @@ function generateBackupCodes(): string[] {
  */
 function validateTOTP(secret: string, token: string): boolean {
   try {
-    // Decodifica base32
-    const decoded = Buffer.from(secret, "base32");
+    // Decodifica base32 (implementação manual, sem dependência externa)
+    const decoded = base32Decode(secret);
     const timeStep = Math.floor(Date.now() / 1000 / 30);
     const buffer = Buffer.alloc(8);
     buffer.writeBigInt64BE(BigInt(timeStep));
 
     const hmac = createHash("sha1")
-      .update(Buffer.concat([decoded, buffer]))
+      .update(Buffer.concat([Buffer.from(decoded), buffer]))
       .digest();
 
     // Dynamic truncation (RFC 4226)

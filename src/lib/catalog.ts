@@ -115,42 +115,46 @@ const PLANS: {
   aiFeatures: boolean;
   priceMonthly: number;
   priceYearly: number;
+  contact?: string;
+  note?: string;
 }[] = [
   {
-    tier: "STARTER",
-    name: "Starter",
-    maxUsers: 10,
-    maxTeams: null,
-    maxProjects: 10,
+    tier: "MENSAL",
+    name: "Mensal",
+    maxUsers: 20,
+    maxTeams: 5,
+    maxProjects: 20,
     advancedReports: false,
     integrations: false,
     aiFeatures: false,
-    priceMonthly: 49.9,
-    priceYearly: 499,
+    priceMonthly: 150.0,
+    priceYearly: 0,
   },
   {
-    tier: "PROFESSIONAL",
-    name: "Professional",
-    maxUsers: 50,
-    maxTeams: 10,
+    tier: "ANUAL",
+    name: "Anual",
+    maxUsers: 100,
+    maxTeams: 20,
     maxProjects: null,
     advancedReports: true,
     integrations: true,
     aiFeatures: false,
-    priceMonthly: 99,
-    priceYearly: 990,
+    priceMonthly: 0,
+    priceYearly: 1500.0,
   },
   {
-    tier: "BUSINESS",
-    name: "Business",
+    tier: "ECOSISTEMA",
+    name: "Integração com Ecossistema",
     maxUsers: null as number | null,
     maxTeams: null as number | null,
     maxProjects: null as number | null,
     advancedReports: true,
     integrations: true,
-    aiFeatures: false,
+    aiFeatures: true,
     priceMonthly: 0,
     priceYearly: 0,
+    contact: "whatsapp:61 9 98361296",
+    note: "Sob consulta — entre em contato pelo WhatsApp (61) 9 98361296",
   },
 ];
 

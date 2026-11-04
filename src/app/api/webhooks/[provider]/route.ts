@@ -4,9 +4,9 @@ import { createHash, timingSafeEqual } from "crypto";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { provider: string } }
+  { params }: { params: Promise<{ provider: string }> }
 ) {
-  const { provider } = params;
+  const { provider } = await params;
 
   // Lê o corpo bruto para verificação de assinatura (quando aplicável)
   const rawBody = await request.text();

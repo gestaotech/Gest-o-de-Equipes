@@ -47,7 +47,7 @@ export async function createOrganization(input: unknown) {
       });
       // Assinatura criada na MESMA transação — org nunca fica sem plano.
       const starter = await tx.plan.findUnique({
-        where: { tier: "STARTER" },
+        where: { tier: "MENSAL" },
       });
       if (starter) {
         await tx.subscription.create({

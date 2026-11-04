@@ -5,14 +5,15 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { eventId: string } }
+  { params }: { params: Promise<{ eventId: string }> }
 ) {
   try {
     const session = await requireSessionApi();
     const scope = await requireDataScope();
+    const { eventId } = await params;
 
     const event = await prisma.event.findUnique({
-      where: { id: params.eventId },
+      where: { id: eventId },
       select: { id: true, organizationId: true },
     });
     if (!event || event.organizationId !== scope.orgId) {
@@ -20,7 +21,7 @@ export async function GET(
     }
 
     const participants = await prisma.eventParticipant.findMany({
-      where: { eventId: params.eventId },
+      where: { eventId },
       include: {
         user: { select: { id: true, name: true, email: true, avatarUrl: true } },
       },
@@ -38,15 +39,16 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { eventId: string } }
+  { params }: { params: Promise<{ eventId: string }> }
 ) {
   try {
     const session = await requireSessionApi();
     const scope = await requireDataScope();
+    const { eventId } = await params;
     const body = await request.json();
 
     const event = await prisma.event.findUnique({
-      where: { id: params.eventId },
+      where: { id: eventId },
       select: { id: true, organizationId: true, userId: true },
     });
     if (!event || event.organizationId !== scope.orgId) {
@@ -61,7 +63,7 @@ export async function POST(
     }
 
     const existing = await prisma.eventParticipant.findUnique({
-      where: { eventId_userId: { eventId: params.eventId, userId: session.sub } },
+      where: { eventId_userId: { eventId, userId: session.sub } },
     });
     if (existing) {
       return NextResponse.json(
@@ -72,7 +74,7 @@ export async function POST(
 
     const participant = await prisma.eventParticipant.create({
       data: {
-        eventId: params.eventId,
+        eventId,
         userId: session.sub,
         status: "PENDING",
       },
@@ -90,14 +92,15 @@ export async function POST(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { eventId: string } }
+  { params }: { params: Promise<{ eventId: string }> }
 ) {
   try {
     const session = await requireSessionApi();
     const scope = await requireDataScope();
+    const { eventId } = await params;
 
     const participant = await prisma.eventParticipant.findUnique({
-      where: { eventId_userId: { eventId: params.eventId, userId: session.sub } },
+      where: { eventId_userId: { eventId, userId: session.sub } },
       select: { id: true },
     });
     if (!participant) {
@@ -105,7 +108,7 @@ export async function DELETE(
     }
 
     const event = await prisma.event.findUnique({
-      where: { id: params.eventId },
+      where: { id: eventId },
       select: { id: true, organizationId: true },
     });
     if (!event || event.organizationId !== scope.orgId) {

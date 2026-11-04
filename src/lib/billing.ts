@@ -137,12 +137,11 @@ export async function createSubscription({
   }
 
   // Determine trial days based on plan tier
-  // PlanTier order: STARTER=0, PROFESSIONAL=1, BUSINESS=2, ENTERPRISE=3
+  // PlanTier order: MENSAL=0, ANUAL=1, ECOSISTEMA=2
   const trialDaysMap: Record<string, number> = {
-    STARTER: 14, // 14-day trial for STARTER plan
-    PROFESSIONAL: 0, // No trial for PROFESSIONAL - must subscribe immediately
-    BUSINESS: 30, // 30-day trial for BUSINESS (optional)
-    ENTERPRISE: 60, // 60-day trial for ENTERPRISE (optional)
+    MENSAL: 7, // 7-day trial for MENSAL plan
+    ANUAL: 15, // 15-day trial for ANUAL plan
+    ECOSISTEMA: 30, // 30-day trial for ECOSISTEMA plan
   };
 
   const trialDays = trialDaysMap[plan.tier] || 0;

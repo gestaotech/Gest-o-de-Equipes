@@ -60,8 +60,6 @@ export async function createIntegration(input: unknown) {
       action: "integration.created",
       entity: "integration",
       entityId: integration.id,
-      userId: session.sub,
-      organizationId: scope.orgId,
       newData: { provider: data.provider, enabled: data.enabled },
     });
 
@@ -97,8 +95,6 @@ export async function updateIntegration(input: { id: string } & Record<string, u
       action: "integration.updated",
       entity: "integration",
       entityId: input.id,
-      userId: session.sub,
-      organizationId: scope.orgId,
       newData: { provider: integration.provider, enabled: data.enabled },
     });
 
@@ -124,8 +120,6 @@ export async function deleteIntegration(id: string) {
       action: "integration.deleted",
       entity: "integration",
       entityId: id,
-      userId: session.sub,
-      organizationId: scope.orgId,
       newData: { provider: integration.provider },
     });
 
@@ -155,8 +149,6 @@ export async function toggleIntegration(id: string) {
       action: "integration.toggled",
       entity: "integration",
       entityId: id,
-      userId: session.sub,
-      organizationId: scope.orgId,
       newData: { provider: integration.provider, enabled: !integration.enabled },
     });
 
