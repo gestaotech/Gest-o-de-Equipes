@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSessionApi } from "@/lib/auth";
 import { requireDataScope } from "@/server/scope";
 import { prisma } from "@/lib/prisma";
+import { AppError } from "@/lib/errors";
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,11 +18,10 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({ incidents });
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message || "Erro interno." },
-      { status: error.statusCode ?? 500 }
-    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro interno.";
+    const statusCode = error instanceof AppError ? error.status : 500;
+    return NextResponse.json({ error: message }, { status: statusCode });
   }
 }
 
@@ -29,23 +29,23 @@ export async function POST(request: NextRequest) {
   try {
     const session = await requireSessionApi();
     const scope = await requireDataScope();
-    const body = await request.json();
+    const body: Record<string, unknown> = await request.json();
 
     const incident = await prisma.securityIncident.create({
       data: {
         organizationId: scope.orgId,
-        title: body.title,
-        description: body.description,
-        category: body.category,
-        severity: body.severity,
-        systemsAffected: body.systemsAffected,
-        dataCompromised: body.dataCompromised,
-        subjectsAffected: body.subjectsAffected,
-        organizationsAffected: body.organizationsAffected,
-        containmentMeasures: body.containmentMeasures,
-        responsePlan: body.responsePlan,
-        responsibleId: body.responsibleId || session.sub,
-        evidenceUrl: body.evidenceUrl,
+        title: body.title as string,
+        description: body.description as string,
+        category: body.category as string,
+        severity: body.severity as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
+        systemsAffected: body.systemsAffected as string | undefined,
+        dataCompromised: body.dataCompromised as string | undefined,
+        subjectsAffected: body.subjectsAffected as number | undefined,
+        organizationsAffected: body.organizationsAffected as number | undefined,
+        containmentMeasures: body.containmentMeasures as string | undefined,
+        responsePlan: body.responsePlan as string | undefined,
+        responsibleId: (body.responsibleId as string) || scope.membership.id,
+        evidenceUrl: body.evidenceUrl as string | undefined,
       },
       include: {
         responsible: { select: { id: true, name: true, email: true } },
@@ -53,10 +53,9 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ incident }, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message || "Erro interno." },
-      { status: error.statusCode ?? 500 }
-    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro interno.";
+    const statusCode = error instanceof AppError ? error.status : 500;
+    return NextResponse.json({ error: message }, { status: statusCode });
   }
 }

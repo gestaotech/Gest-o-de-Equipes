@@ -6,7 +6,8 @@
  * - Chave gerenciada via variável de ambiente ENCRYPTION_KEY (nunca junto aos dados).
  * - IV aleatório por criptografia, armazenado junto ao ciphertext.
  * - HMAC com chave independente para índice de busca (evita descriptografar todos os registros).
- * - Versionamento dos dados criptografados.
+ * - Versionamento dos dados criptografados para rotação de chave.
+ * - Falha segura quando chaves obrigatórias estão ausentes.
  */
 
 import { createCipheriv, createDecipheriv, randomBytes, scrypt, createHmac, timingSafeEqual } from "crypto";
@@ -22,12 +23,19 @@ const KEY_LENGTH = 32;
 const VERSION_PREFIX = "tf:enc:v1:";
 
 /**
- * Deriva uma chave de criptografia a partir da ENCRYPTION_KEY usando scrypt.
+ * Versão do esquema de criptografia. Incrementar quando mudar o algoritmo ou formato.
  */
-async function deriveKey(masterKey: string, salt: Buffer): Promise<Buffer> {
-  return (await scryptAsync(masterKey, salt, KEY_LENGTH)) as Buffer;
-}
+export const ENCRYPTION_VERSION = 1;
 
+/**
+ * Tamanho mínimo esperado para uma ENCRYPTION_KEY segura.
+ */
+const MIN_KEY_LENGTH = 32;
+
+/**
+ * Valida e retorna a chave mestra de criptografia.
+ * Falha de forma segura se a chave estiver ausente ou for fraca.
+ */
 function getMasterKey(): string {
   const key = process.env.ENCRYPTION_KEY;
   if (!key) {
@@ -35,9 +43,17 @@ function getMasterKey(): string {
       "ENCRYPTION_KEY não configurada. Defina uma chave de 32+ caracteres para criptografia de dados sensíveis."
     );
   }
+  if (key.length < MIN_KEY_LENGTH) {
+    throw new Error(
+      `ENCRYPTION_KEY muito curta. Mínimo de ${MIN_KEY_LENGTH} caracteres exigido.`
+    );
+  }
   return key;
 }
 
+/**
+ * Valida e retorna a chave HMAC para índice de busca.
+ */
 function getHmacKey(): string {
   const key = process.env.ENCRYPTION_HMAC_KEY;
   if (!key) {
@@ -45,11 +61,19 @@ function getHmacKey(): string {
       "ENCRYPTION_HMAC_KEY não configurada. Defina uma chave independente para HMAC de busca."
     );
   }
+  if (key.length < MIN_KEY_LENGTH) {
+    throw new Error(
+      `ENCRYPTION_HMAC_KEY muito curta. Mínimo de ${MIN_KEY_LENGTH} caracteres exigido.`
+    );
+  }
   return key;
 }
 
 /**
- * Criptografa uma string. Retorna: VERSION_PREFIX + salt + iv + tag + ciphertext (base64url).
+ * Criptografa uma string.
+ * Retorna: VERSION_PREFIX + salt + iv + tag + ciphertext (base64url).
+ *
+ * @throws Error se ENCRYPTION_KEY não estiver configurada ou for inválida.
  */
 export async function encrypt(plaintext: string): Promise<string> {
   const masterKey = getMasterKey();
@@ -71,6 +95,8 @@ export async function encrypt(plaintext: string): Promise<string> {
 
 /**
  * Descriptografa uma string previamente criptografada com encrypt().
+ *
+ * @throws Error se o formato não for reconhecido ou a descriptografia falhar.
  */
 export async function decrypt(encryptedData: string): Promise<string> {
   const masterKey = getMasterKey();
@@ -80,6 +106,11 @@ export async function decrypt(encryptedData: string): Promise<string> {
   }
 
   const payload = Buffer.from(encryptedData.slice(VERSION_PREFIX.length), "base64url");
+
+  if (payload.length < SALT_LENGTH + IV_LENGTH + TAG_LENGTH + 1) {
+    throw new Error("Payload criptografado muito curto.");
+  }
+
   const salt = payload.subarray(0, SALT_LENGTH);
   const iv = payload.subarray(SALT_LENGTH, SALT_LENGTH + IV_LENGTH);
   const tag = payload.subarray(SALT_LENGTH + IV_LENGTH, SALT_LENGTH + IV_LENGTH + TAG_LENGTH);
@@ -96,8 +127,18 @@ export async function decrypt(encryptedData: string): Promise<string> {
 }
 
 /**
+ * Verifica se uma string está no formato criptografado (versão v1).
+ */
+export function isEncrypted(value: string | null | undefined): boolean {
+  if (!value || typeof value !== "string") return false;
+  return value.startsWith(VERSION_PREFIX);
+}
+
+/**
  * Gera um HMAC determinístico para um valor, permitindo busca por índice
- * sem descriptografar todos os registros.
+ * sem descriptografar todos os registros. Usa chave independente da criptografia.
+ *
+ * @throws Error se ENCRYPTION_HMAC_KEY não estiver configurada.
  */
 export function generateHmacIndex(value: string): string {
   const hmacKey = getHmacKey();
@@ -107,11 +148,11 @@ export function generateHmacIndex(value: string): string {
 }
 
 /**
- * Verifica se uma string está no formato criptografado (versão v1).
+ * Compara dois valores HMAC de forma segura (ataque de tempo constante).
  */
-export function isEncrypted(value: string | null | undefined): boolean {
-  if (!value || typeof value !== "string") return false;
-  return value.startsWith(VERSION_PREFIX);
+export function verifyHmacIndex(value: string, expectedHmac: string): boolean {
+  const computed = generateHmacIndex(value);
+  return timingSafeEqual(Buffer.from(computed, "hex"), Buffer.from(expectedHmac, "hex"));
 }
 
 /**
@@ -145,4 +186,25 @@ export function maskEmail(email: string | null | undefined): string | null | und
   const [local, domain] = email.split("@");
   if (!local || !domain) return email;
   return `${local.charAt(0)}***@${domain}`;
+}
+
+/**
+ * Valida o formato de CPF (apenas dígitos, 11 posições, não todos iguais).
+ */
+export function validateCpf(cpf: string): boolean {
+  const digits = cpf.replace(/\D/g, "");
+  if (digits.length !== 11) return false;
+  if (/^(\d)\1+$/.test(digits)) return false;
+
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += parseInt(digits.charAt(i)) * (10 - i);
+  let remainder = sum % 11;
+  const digit1 = remainder < 2 ? 0 : 11 - remainder;
+  if (parseInt(digits.charAt(9)) !== digit1) return false;
+
+  sum = 0;
+  for (let i = 0; i < 10; i++) sum += parseInt(digits.charAt(i)) * (11 - i);
+  remainder = sum % 11;
+  const digit2 = remainder < 2 ? 0 : 11 - remainder;
+  return parseInt(digits.charAt(10)) === digit2;
 }

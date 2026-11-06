@@ -1,51 +1,113 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { prisma } from "@/lib/prisma";
 
 const PROTECTED = ["/dashboard", "/app", "/onboarding", "/criar-org", "/profile"];
 const AUTH_PAGES = ["/login", "/cadastro", "/recuperar", "/resetar-senha", "/primeiro-acesso"];
 
 // ------------------------------------------------------------
-// RATE LIMITING (memória em processo; reinicia ao redeploy)
+// RATE LIMITING DISTRIBUÍDO (via PostgreSQL/Prisma)
+// Funciona em ambiente serverless (Vercel) pois o estado está no banco.
 // ------------------------------------------------------------
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minuto
-const RATE_LIMIT_MAX = 10; // máx. 10 requisições por minuto por IP
+const RATE_LIMIT_MAX_LOGIN = 5;   // máx. 5 tentativas de login por minuto por IP
+const RATE_LIMIT_MAX_RESET = 3;   // máx. 3 tentativas de recuperação por minuto por IP
+const RATE_LIMIT_MAX_2FA = 10;    // máx. 10 tentativas de 2FA por minuto por IP
+const RATE_LIMIT_MAX_GENERAL = 30; // máx. 30 requisições gerais por minuto por IP
+
+// Limites por endpoint
+const ENDPOINT_LIMITS: Record<string, { max: number; windowMs: number }> = {
+  "/login": { max: RATE_LIMIT_MAX_LOGIN, windowMs: RATE_LIMIT_WINDOW_MS },
+  "/cadastro": { max: RATE_LIMIT_MAX_LOGIN, windowMs: RATE_LIMIT_WINDOW_MS },
+  "/recuperar": { max: RATE_LIMIT_MAX_RESET, windowMs: RATE_LIMIT_WINDOW_MS },
+  "/resetar-senha": { max: RATE_LIMIT_MAX_RESET, windowMs: RATE_LIMIT_WINDOW_MS },
+  "/primeiro-acesso": { max: RATE_LIMIT_MAX_GENERAL, windowMs: RATE_LIMIT_WINDOW_MS },
+};
 
 function getClientIp(request: NextRequest): string {
+  // Não confiar apenas no IP enviado pelo cliente
   const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim();
+  if (forwarded) {
+    // Pegar o primeiro IP (mais próximo do cliente)
+    const first = forwarded.split(",")[0].trim();
+    if (first) return first;
+  }
   const real = request.headers.get("x-real-ip");
   if (real) return real;
   return "unknown";
 }
 
-function rateLimit(ip: string): { allowed: boolean; remaining: number } {
+/**
+ * Verifica e atualiza o contador de rate limiting no banco de dados.
+ * Usa transação para consistência em ambiente distribuído.
+ */
+async function checkRateLimit(
+  key: string,
+  maxRequests: number,
+  windowMs: number
+): Promise<{ allowed: boolean; remaining: number; resetAt: number }> {
   const now = Date.now();
-  const record = rateLimitMap.get(ip);
+  const windowStart = now - (now % windowMs);
+  const windowEnd = windowStart + windowMs;
 
-  if (!record || now > record.resetAt) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return { allowed: true, remaining: RATE_LIMIT_MAX - 1 };
+  // Tentar criar ou atualizar o registro de rate limit
+  const existing = await prisma.rateLimitRecord.findUnique({
+    where: { key },
+  });
+
+  const existingResetAt = existing?.resetAt ? existing.resetAt.getTime() : 0;
+
+  if (!existing || existingResetAt <= now) {
+    // Janela expirada ou não existe: criar novo registro
+    await prisma.rateLimitRecord.create({
+      data: {
+        key,
+        count: 1,
+        resetAt: new Date(windowEnd),
+      },
+    });
+    return { allowed: true, remaining: maxRequests - 1, resetAt: windowEnd };
   }
 
-  if (record.count >= RATE_LIMIT_MAX) {
-    return { allowed: false, remaining: 0 };
+  if (existing.count >= maxRequests) {
+    return { allowed: false, remaining: 0, resetAt: existingResetAt };
   }
 
-  record.count++;
-  return { allowed: true, remaining: RATE_LIMIT_MAX - record.count };
+  // Incrementar contador
+  await prisma.rateLimitRecord.update({
+    where: { key },
+    data: { count: existing.count + 1 },
+  });
+
+  return { allowed: true, remaining: maxRequests - existing.count - 1, resetAt: existingResetAt };
 }
 
-export function middleware(request: NextRequest) {
+function getRateLimitConfig(pathname: string): { max: number; windowMs: number } | null {
+  // Verificar rotas de autenticação específicas primeiro
+  for (const [path, config] of Object.entries(ENDPOINT_LIMITS)) {
+    if (pathname === path || pathname.startsWith(`${path}/`)) {
+      return config;
+    }
+  }
+  // Limite geral para outras rotas autenticadas
+  if (PROTECTED.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+    return { max: RATE_LIMIT_MAX_GENERAL, windowMs: RATE_LIMIT_WINDOW_MS };
+  }
+  return null;
+}
+
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const ip = getClientIp(request);
 
-  // Rate limiting apenas em rotas de autenticação sensíveis
-  const isAuthRoute = AUTH_PAGES.includes(pathname);
-  if (isAuthRateLimit(pathname)) {
-    const limit = rateLimit(ip);
+  // Rate limiting em rotas sensíveis
+  const limitConfig = getRateLimitConfig(pathname);
+  if (limitConfig) {
+    const rateLimitKey = `rl:${pathname}:${ip}`;
+    const limit = await checkRateLimit(rateLimitKey, limitConfig.max, limitConfig.windowMs);
     if (!limit.allowed) {
       return NextResponse.json(
-        { error: "Muitas tentativas. Tente novamente em alguns minutos." },
+        { error: "Muitas tentativas. Tente novamente em alguns minutos.", retryAfter: Math.ceil((limit.resetAt - Date.now()) / 1000) },
         { status: 429 }
       );
     }
@@ -66,15 +128,6 @@ export function middleware(request: NextRequest) {
   }
 
   return NextResponse.next();
-}
-
-function isAuthRateLimit(pathname: string): boolean {
-  return [
-    "/login",
-    "/cadastro",
-    "/recuperar",
-    "/resetar-senha",
-  ].includes(pathname);
 }
 
 export const config = {

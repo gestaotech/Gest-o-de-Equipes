@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { handleAction, AppError, ok } from "@/lib/errors";
 import { requireSessionApi } from "@/lib/auth";
 import { requireDataScope } from "@/server/scope";
+import { guardPerm } from "@/server/guards";
 import { logActivity } from "@/server/activity";
 import z from "zod";
 import { DataCategory, DataSubjectCategory, LegalBasis, SharingType, IncidentSeverity } from "@prisma/client";
@@ -45,6 +46,7 @@ export async function createProcessingRecord(input: unknown) {
   return handleAction(async () => {
     const session = await requireSessionApi();
     const scope = await requireDataScope();
+    guardPerm(scope.membership, "settings.write");
     const data = processingRecordSchema.parse(input);
 
     const record = await prisma.processingRecord.create({
@@ -80,6 +82,7 @@ export async function updateProcessingRecord(input: { id: string } & Record<stri
   return handleAction(async () => {
     const session = await requireSessionApi();
     const scope = await requireDataScope();
+    guardPerm(scope.membership, "settings.write");
     const data = processingRecordSchema.parse(input);
 
     const record = await prisma.processingRecord.findFirst({
@@ -122,6 +125,7 @@ export async function deleteProcessingRecord(id: string) {
   return handleAction(async () => {
     const session = await requireSessionApi();
     const scope = await requireDataScope();
+    guardPerm(scope.membership, "settings.write");
 
     const record = await prisma.processingRecord.findFirst({
       where: { id, organizationId: scope.orgId },
@@ -174,6 +178,7 @@ export async function createPrivacyPolicy(input: unknown) {
   return handleAction(async () => {
     const session = await requireSessionApi();
     const scope = await requireDataScope();
+    guardPerm(scope.membership, "settings.write");
     const data = privacyPolicySchema.parse(input);
 
     // Se está ativando esta política, desativa as outras
@@ -211,6 +216,7 @@ export async function setActivePrivacyPolicy(policyId: string) {
   return handleAction(async () => {
     const session = await requireSessionApi();
     const scope = await requireDataScope();
+    guardPerm(scope.membership, "settings.write");
 
     const policy = await prisma.privacyPolicy.findFirst({
       where: { id: policyId, organizationId: scope.orgId },
@@ -368,6 +374,7 @@ export async function createRetentionPolicy(input: unknown) {
   return handleAction(async () => {
     const session = await requireSessionApi();
     const scope = await requireDataScope();
+    guardPerm(scope.membership, "settings.write");
     const data = retentionPolicySchema.parse(input);
 
     const policy = await prisma.retentionPolicy.create({
@@ -434,6 +441,7 @@ export async function createSecurityIncident(input: unknown) {
   return handleAction(async () => {
     const session = await requireSessionApi();
     const scope = await requireDataScope();
+    guardPerm(scope.membership, "settings.write");
     const data = securityIncidentSchema.parse(input);
 
     const incident = await prisma.securityIncident.create({
@@ -472,6 +480,7 @@ export async function updateSecurityIncident(input: { id: string } & Record<stri
   return handleAction(async () => {
     const session = await requireSessionApi();
     const scope = await requireDataScope();
+    guardPerm(scope.membership, "settings.write");
     const data = securityIncidentSchema.parse(input);
 
     const incident = await prisma.securityIncident.findFirst({
@@ -517,6 +526,7 @@ export async function resolveSecurityIncident(incidentId: string) {
   return handleAction(async () => {
     const session = await requireSessionApi();
     const scope = await requireDataScope();
+    guardPerm(scope.membership, "settings.write");
 
     const incident = await prisma.securityIncident.findFirst({
       where: { id: incidentId, organizationId: scope.orgId },

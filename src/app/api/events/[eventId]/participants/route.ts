@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSessionApi } from "@/lib/auth";
 import { requireDataScope } from "@/server/scope";
 import { prisma } from "@/lib/prisma";
+import { AppError } from "@/lib/errors";
 
 export async function GET(
   request: NextRequest,
@@ -29,11 +30,10 @@ export async function GET(
     });
 
     return NextResponse.json({ participants });
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message || "Erro interno." },
-      { status: error.statusCode ?? 500 }
-    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro interno.";
+    const statusCode = error instanceof AppError ? error.status : 500;
+    return NextResponse.json({ error: message }, { status: statusCode });
   }
 }
 
@@ -45,7 +45,7 @@ export async function POST(
     const session = await requireSessionApi();
     const scope = await requireDataScope();
     const { eventId } = await params;
-    const body = await request.json();
+    const body: Record<string, unknown> = await request.json();
 
     const event = await prisma.event.findUnique({
       where: { id: eventId },
@@ -82,11 +82,10 @@ export async function POST(
     });
 
     return NextResponse.json({ participant }, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message || "Erro interno." },
-      { status: error.statusCode ?? 500 }
-    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro interno.";
+    const statusCode = error instanceof AppError ? error.status : 500;
+    return NextResponse.json({ error: message }, { status: statusCode });
   }
 }
 
@@ -120,10 +119,9 @@ export async function DELETE(
     });
 
     return NextResponse.json({ ok: true });
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message || "Erro interno." },
-      { status: error.statusCode ?? 500 }
-    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro interno.";
+    const statusCode = error instanceof AppError ? error.status : 500;
+    return NextResponse.json({ error: message }, { status: statusCode });
   }
 }

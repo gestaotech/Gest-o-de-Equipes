@@ -30,7 +30,7 @@ export function sessionTokenHash(sid: string): string {
   return createHash("sha256").update(sid).digest("hex");
 }
 
-const secretKey = () => {
+export const secretKey = () => {
   const s = process.env.AUTH_SECRET;
   if (!s) throw new Error("AUTH_SECRET não configurado.");
   return new TextEncoder().encode(s);

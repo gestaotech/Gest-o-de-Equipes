@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSessionApi } from "@/lib/auth";
 import { requireDataScope } from "@/server/scope";
+import { AppError } from "@/lib/errors";
 import {
   createLGPDRequest,
   listLGPDRequests,
@@ -52,11 +53,10 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Ação não especificada." }, { status: 400 });
       }
     }
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message || "Erro interno." },
-      { status: error.statusCode ?? 500 }
-    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro interno.";
+    const statusCode = error instanceof AppError ? error.status : 500;
+    return NextResponse.json({ error: message }, { status: statusCode });
   }
 }
 
@@ -64,19 +64,18 @@ export async function POST(request: NextRequest) {
   try {
     const session = await requireSessionApi();
     const scope = await requireDataScope();
-    const body = await request.json();
+    const body: Record<string, unknown> = await request.json();
 
     const result = await createLGPDRequest({
       ...body,
       // userId e requesterId são definidos na action com base na sessão
-    } as any);
+    });
 
     return NextResponse.json(result, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message || "Erro interno." },
-      { status: error.statusCode ?? 500 }
-    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro interno.";
+    const statusCode = error instanceof AppError ? error.status : 500;
+    return NextResponse.json({ error: message }, { status: statusCode });
   }
 }
 
