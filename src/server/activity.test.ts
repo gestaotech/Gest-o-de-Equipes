@@ -97,12 +97,12 @@ expect(prisma.activityLog.create).toHaveBeenCalled();
        
        const newData = callArgs.data.newData;
       
-      // Verifica que dados sensíveis foram removidos
-      expect(newData).not.toHaveProperty("password");
-      expect(newData).not.toHaveProperty("passwordHash");
-      expect(newData).not.toHaveProperty("token");
+      // Verifica que dados sensíveis foram redigidos (não expostos em texto puro)
+      expect((newData as Record<string, unknown>).password).toBe("[REDACTED]");
+      expect((newData as Record<string, unknown>).passwordHash).toBe("[REDACTED]");
+      expect((newData as Record<string, unknown>).token).toBe("[REDACTED]");
       // Verifica que dados seguros foram mantidos
-      expect(newData).toHaveProperty("safeField");
+      expect((newData as Record<string, unknown>).safeField).toBe("safe_value");
     });
 
     it("should handle null/undefined values correctly", async () => {

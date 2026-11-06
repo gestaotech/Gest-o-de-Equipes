@@ -5,10 +5,11 @@
  * - Campos sensíveis (CPF, segredo TOTP, códigos de backup) armazenados criptografados.
  * - Chave gerenciada via variável de ambiente ENCRYPTION_KEY (nunca junto aos dados).
  * - IV aleatório por criptografia, armazenado junto ao ciphertext.
- * - Não é possível descriptografar sem a chave correta.
+ * - HMAC com chave independente para índice de busca (evita descriptografar todos os registros).
+ * - Versionamento dos dados criptografados.
  */
 
-import { createCipheriv, createDecipheriv, randomBytes, scrypt } from "crypto";
+import { createCipheriv, createDecipheriv, randomBytes, scrypt, createHmac, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 
 const scryptAsync = promisify(scrypt);
@@ -18,6 +19,14 @@ const IV_LENGTH = 16;
 const SALT_LENGTH = 16;
 const TAG_LENGTH = 16;
 const KEY_LENGTH = 32;
+const VERSION_PREFIX = "tf:enc:v1:";
+
+/**
+ * Deriva uma chave de criptografia a partir da ENCRYPTION_KEY usando scrypt.
+ */
+async function deriveKey(masterKey: string, salt: Buffer): Promise<Buffer> {
+  return (await scryptAsync(masterKey, salt, KEY_LENGTH)) as Buffer;
+}
 
 function getMasterKey(): string {
   const key = process.env.ENCRYPTION_KEY;
@@ -29,15 +38,24 @@ function getMasterKey(): string {
   return key;
 }
 
+function getHmacKey(): string {
+  const key = process.env.ENCRYPTION_HMAC_KEY;
+  if (!key) {
+    throw new Error(
+      "ENCRYPTION_HMAC_KEY não configurada. Defina uma chave independente para HMAC de busca."
+    );
+  }
+  return key;
+}
+
 /**
- * Criptografa uma string. Retorna: salt + iv + tag + ciphertext (tudo em base64url).
+ * Criptografa uma string. Retorna: VERSION_PREFIX + salt + iv + tag + ciphertext (base64url).
  */
 export async function encrypt(plaintext: string): Promise<string> {
   const masterKey = getMasterKey();
   const salt = randomBytes(SALT_LENGTH);
   const iv = randomBytes(IV_LENGTH);
 
-  // Deriva chave específica para esta operação usando o salt
   const cipherKey = await scryptAsync(masterKey, salt, KEY_LENGTH);
   const cipher = createCipheriv(ALGORITHM, cipherKey as Buffer, iv);
 
@@ -47,7 +65,8 @@ export async function encrypt(plaintext: string): Promise<string> {
   const ciphertext = Buffer.concat(encryptedParts);
   const tag = cipher.getAuthTag();
 
-  return Buffer.concat([salt, iv, tag, ciphertext]).toString("base64url");
+  const payload = Buffer.concat([salt, iv, tag, ciphertext]);
+  return VERSION_PREFIX + payload.toString("base64url");
 }
 
 /**
@@ -55,12 +74,16 @@ export async function encrypt(plaintext: string): Promise<string> {
  */
 export async function decrypt(encryptedData: string): Promise<string> {
   const masterKey = getMasterKey();
-  const buf = Buffer.from(encryptedData, "base64url");
 
-  const salt = buf.subarray(0, SALT_LENGTH);
-  const iv = buf.subarray(SALT_LENGTH, SALT_LENGTH + IV_LENGTH);
-  const tag = buf.subarray(SALT_LENGTH + IV_LENGTH, SALT_LENGTH + IV_LENGTH + TAG_LENGTH);
-  const ciphertext = buf.subarray(SALT_LENGTH + IV_LENGTH + TAG_LENGTH);
+  if (!encryptedData.startsWith(VERSION_PREFIX)) {
+    throw new Error("Formato de dados criptografado não reconhecido.");
+  }
+
+  const payload = Buffer.from(encryptedData.slice(VERSION_PREFIX.length), "base64url");
+  const salt = payload.subarray(0, SALT_LENGTH);
+  const iv = payload.subarray(SALT_LENGTH, SALT_LENGTH + IV_LENGTH);
+  const tag = payload.subarray(SALT_LENGTH + IV_LENGTH, SALT_LENGTH + IV_LENGTH + TAG_LENGTH);
+  const ciphertext = payload.subarray(SALT_LENGTH + IV_LENGTH + TAG_LENGTH);
 
   const cipherKey = await scryptAsync(masterKey, salt, KEY_LENGTH);
   const decipher = createDecipheriv(ALGORITHM, cipherKey as Buffer, iv);
@@ -73,16 +96,22 @@ export async function decrypt(encryptedData: string): Promise<string> {
 }
 
 /**
- * Verifica se uma string está no formato criptografado (base64url com tamanho mínimo).
+ * Gera um HMAC determinístico para um valor, permitindo busca por índice
+ * sem descriptografar todos os registros.
+ */
+export function generateHmacIndex(value: string): string {
+  const hmacKey = getHmacKey();
+  const hmac = createHmac("sha256", hmacKey);
+  hmac.update(value.trim().toLowerCase());
+  return hmac.digest("hex");
+}
+
+/**
+ * Verifica se uma string está no formato criptografado (versão v1).
  */
 export function isEncrypted(value: string | null | undefined): boolean {
   if (!value || typeof value !== "string") return false;
-  try {
-    const buf = Buffer.from(value, "base64url");
-    return buf.length >= SALT_LENGTH + IV_LENGTH + TAG_LENGTH + 1;
-  } catch {
-    return false;
-  }
+  return value.startsWith(VERSION_PREFIX);
 }
 
 /**
