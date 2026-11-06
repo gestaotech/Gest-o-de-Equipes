@@ -110,6 +110,12 @@ model User {
   preferences       UserPreference?
   twoFactor         UserTwoFactor?
   eventParticipants EventParticipant[]
+  lgpdRequests          LGPDRequest[]
+  lgpdRequester       LGPDRequest[] @relation("LGPDRequester")
+  lgpdHandler         LGPDRequest[] @relation("LGPDHandler")
+  lgpdRequestHistory  LGPDRequestHistory[]
+  consents            Consent[]
+  securityIncidents   SecurityIncident[]
 
   @@map("users")
 }
@@ -225,6 +231,12 @@ model Organization {
   subscriptions Subscription[]
   apiKeys       ApiKey[]
   integrations  Integration[]
+  lgpdRequests  LGPDRequest[]
+  processingRecords ProcessingRecord[]
+  privacyPolicies PrivacyPolicy[]
+  consents Consent[]
+  retentionPolicies RetentionPolicy[]
+  securityIncidents SecurityIncident[]
 
   @@index([slug])
   @@map("organizations")
@@ -842,4 +854,265 @@ model ApiKey {
 
   @@index([organizationId])
   @@map("api_keys")
+}
+
+// ------------------------------------------------------------
+// LGPD — DIREITOS DOS TITULARES E GOVERNANÇA
+// ------------------------------------------------------------
+
+enum LGPDRequestType {
+  ACCESS       // Acesso aos dados pessoais
+  CORRECTION   // Correção de dados incompletos/inaccurados/desatualizados
+  ANONYMIZATION // Anonimização, bloqueio ou eliminação de dados desnecessários/excessivos
+  PORTABILITY  // Portabilidade dos dados a outro fornecedor
+  DELETION     // Eliminação de dados pessoais
+  REVOCATION   // Revogação do consentimento
+  OPPOSITION   // Oposição ao tratamento
+  OTHER        // Outra solicitação aplicável
+}
+
+enum LGPDRequestStatus {
+  PENDING    // Solicitação recebida, aguardando análise
+  IN_PROGRESS // Em análise/atendimento
+  COMPLETED  // Solicitação atendida
+  REJECTED   // Solicitação rejeitada (com justificativa)
+  CANCELLED  // Cancelada pelo titular
+}
+
+model LGPDRequest {
+  id             String           @id @default(cuid())
+  organizationId String
+  userId         String           // Titular dos dados
+  requesterId    String?          // Quem fez a solicitação (pode ser o próprio titular ou admin)
+  type           LGPDRequestType
+  status         LGPDRequestStatus @default(PENDING)
+  description    String?          // Detalhes da solicitação
+  legalBasis     String?          // Base legal aplicável
+  responseDeadline DateTime?      // Prazo legal para resposta (15 dias úteis LGPD)
+  completedAt    DateTime?
+  rejectionReason String?        // Justificativa de recusa ou retenção
+  handledById    String?          // Responsável pelo atendimento (admin)
+  handledAt      DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requester    User?          @relation("LGPDRequester", fields: [requesterId], references: [id], onDelete: SetNull)
+  handledBy    User?          @relation("LGPDHandler", fields: [handledById], references: [id], onDelete: SetNull)
+
+  history      LGPDRequestHistory[]
+  @@index([organizationId])
+  @@index([userId])
+  @@index([status])
+  @@index([type])
+  @@map("lgpd_requests")
+}
+
+model LGPDRequestHistory {
+  id          String   @id @default(cuid())
+  requestId   String
+  status      LGPDRequestStatus
+  changedById String?
+  changedAt   DateTime @default(now())
+  comment     String?
+
+  request LGPDRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  changedBy User?     @relation(fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([requestId])
+  @@map("lgpd_request_history")
+}
+
+// ------------------------------------------------------------
+// ROPA — REGISTRO DE OPERAÇÕES DE TRATAMENTO (Art. 20 LGPD)
+// ------------------------------------------------------------
+
+enum DataCategory {
+  IDENTIFICATION
+  CONTACT
+  EMPLOYMENT
+  AUTHENTICATION
+  DEVICE
+  BEHAVIORAL
+  FINANCIAL
+  HEALTH
+  BIOMETRIC
+  OTHER
+}
+
+enum DataSubjectCategory {
+  EMPLOYEE
+  MEMBER
+  CUSTOMER
+  PARTNER
+  OTHER
+}
+
+enum LegalBasis {
+  CONSENT
+  LEGAL_OBLIGATION
+  PUBLIC_POLICY
+  CONTRACT
+  LEGITIMATE_INTEREST
+  VITAL_INTEREST
+  LEGAL_EXERCISE
+  OTHER
+}
+
+enum SharingType {
+  NONE
+  THIRD_PARTY_PROCESSOR
+  CONTROLLER
+  AUTHORITY
+  OTHER
+}
+
+model ProcessingRecord {
+  id           String   @id @default(cuid())
+  organizationId String
+  name         String
+  description  String?
+  purpose      String
+  legalBasis   LegalBasis
+  dataCategory DataCategory[]
+  subjectCategory DataCategory[]
+  dataSubjects DataSubjectCategory[]
+  sharing      SharingType @default(NONE)
+  sharedWith   String?
+  retentionPeriod String?
+  securityMeasures String?
+  dpoResponsible String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  @@index([organizationId])
+  @@map("processing_records")
+}
+
+// ------------------------------------------------------------
+// POLÍTICA DE PRIVACIDADE E CONSENTIMENTO
+// ------------------------------------------------------------
+
+model PrivacyPolicy {
+  id          String   @id @default(cuid())
+  organizationId String
+  title       String
+  version     String
+  content     String
+  isActive    Boolean  @default(false)
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  consents    Consent[]
+
+  @@index([organizationId])
+  @@unique([organizationId, version])
+  @@map("privacy_policies")
+}
+
+model Consent {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  policyId       String
+  version        String
+  grantedAt      DateTime @default(now())
+  revokedAt      DateTime?
+  ipAddress      String?
+  userAgent      String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  policy       PrivacyPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, policyId])
+  @@index([organizationId])
+  @@index([userId])
+  @@map("consents")
+}
+
+// ------------------------------------------------------------
+// POLÍTICA DE RETENÇÃO E DESCARTE
+// ------------------------------------------------------------
+
+enum RetentionStatus {
+  ACTIVE
+  SCHEDULED_FOR_DELETION
+  DELETED
+  ANONYMIZED
+  RETAINED_LEGAL
+}
+
+model RetentionPolicy {
+  id               String   @id @default(cuid())
+  organizationId   String
+  entityType       String
+  entityField      String?
+  condition        String
+  action           String
+  retentionDays    Int
+  legalBasis       String?
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  @@index([organizationId])
+  @@index([entityType])
+  @@map("retention_policies")
+}
+
+// ------------------------------------------------------------
+// GESTÃO DE INCIDENTES DE SEGURANÇA
+// ------------------------------------------------------------
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  OPEN
+  INVESTIGATING
+  CONTAINED
+  RESOLVED
+  CLOSED
+}
+
+model SecurityIncident {
+  id             String   @id @default(cuid())
+  organizationId String
+  title          String
+  description    String
+  category       String
+  severity       IncidentSeverity
+  status         IncidentStatus @default(OPEN)
+  systemsAffected String?
+  dataCompromised String?
+  subjectsAffected Int?
+  organizationsAffected Int?
+  containmentMeasures String?
+  responsePlan    String?
+  responsibleId   String?
+  evidenceUrl     String?
+  notifiedAuthorityAt DateTime?
+  notifiedSubjectsAt DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  resolvedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  responsible   User?       @relation(fields: [responsibleId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([severity])
+  @@map("security_incidents")
 }
