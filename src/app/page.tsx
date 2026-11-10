@@ -17,6 +17,7 @@ import {
 import { Logo } from "@/components/ui/logo";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { PLANS as CATALOG_PLANS } from "@/lib/plans";
 
 const FEATURES = [
   {
@@ -58,47 +59,25 @@ const STEPS = [
   { n: "04", t: "Acompanhe tudo", d: "Dashboard em tempo real, agenda e comunicações." },
 ];
 
-const PLANS = [
-  {
-    name: "Starter",
-    price: "R$ 49,90",
-    period: "/mês por empresa",
-    desc: "Para começar a organizar pequenos times.",
-    features: ["Até 10 colaboradores", "10 projetos ativos", "Todos os módulos", "Suporte por e-mail"],
-    cta: "Escolher plano",
-    highlight: false,
-  },
-  {
-    name: "Professional",
-    price: "R$ 99,00",
-    period: "/mês por empresa",
-    desc: "Para times em crescimento que precisam de relatórios.",
-    features: [
-      "Até 50 colaboradores",
-      "Projetos ilimitados",
-      "Relatórios avançados",
-      "Integrações",
-      "Suporte prioritário",
-    ],
-    cta: "Testar 14 dias grátis",
-    highlight: true,
-  },
-  {
-    name: "Business",
-    price: "Sob consulta",
-    period: "",
-    desc: "Para empresas que querem escala e integrações.",
-    features: [
-      "Colaboradores ilimitados",
-      "Tudo do Professional",
-      "Integrações",
-      "SSO e auditoria",
-      "Gerente de conta dedicado",
-    ],
-    cta: "Falar com vendas",
-    highlight: false,
-  },
-];
+const PLANS = CATALOG_PLANS.map((p) => ({
+  name: p.name,
+  price: p.priceMonthly > 0 ? `R$ ${p.priceMonthly.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—",
+  period: p.priceMonthly > 0 ? "/mês por empresa" : p.priceYearly > 0 ? "/ano por empresa" : "/sob consulta",
+  desc: p.name === "Mensal" ? "Para pequenos times que precisam de organização essencial." : p.name === "Anual" ? "Para times em crescimento com relatórios avançados." : "Para empresas que precisam de escala completa com integrações e IA.",
+  features: (() => {
+    const feats: string[] = [];
+    if (p.maxUsers) feats.push(`Até ${p.maxUsers} colaboradores`);
+    if (p.maxTeams) feats.push(`Até ${p.maxTeams} equipes`);
+    if (p.maxProjects) feats.push(`Até ${p.maxProjects} projetos`);
+    else feats.push("Projetos ilimitados");
+    if (p.advancedReports) feats.push("Relatórios avançados");
+    if (p.integrations) feats.push("Integrações");
+    if (p.aiFeatures) feats.push("Recursos de IA");
+    return feats;
+  })(),
+  cta: p.priceYearly > 0 && p.priceMonthly === 0 ? "Assinar anual" : p.priceMonthly > 0 ? "Assinar mensal" : "Falar com vendas",
+  highlight: p.tier === "ANUAL",
+}));
 
 const FAQ = [
   { q: "O que é o TeamFlow?", a: "É a plataforma de gestão operacional da sua empresa: colaboradores, departamentos, equipes, projetos, tarefas, metas, agenda e comunicados em um único lugar." },
