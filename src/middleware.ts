@@ -25,10 +25,8 @@ const ENDPOINT_LIMITS: Record<string, { max: number; windowMs: number }> = {
 };
 
 function getClientIp(request: NextRequest): string {
-  // Não confiar apenas no IP enviado pelo cliente
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) {
-    // Pegar o primeiro IP (mais próximo do cliente)
     const first = forwarded.split(",")[0].trim();
     if (first) return first;
   }
@@ -37,10 +35,6 @@ function getClientIp(request: NextRequest): string {
   return "unknown";
 }
 
-/**
- * Verifica e atualiza o contador de rate limiting no banco de dados.
- * Usa transação para consistência em ambiente distribuído.
- */
 async function checkRateLimit(
   key: string,
   maxRequests: number,
@@ -50,7 +44,6 @@ async function checkRateLimit(
   const windowStart = now - (now % windowMs);
   const windowEnd = windowStart + windowMs;
 
-  // Tentar criar ou atualizar o registro de rate limit
   const existing = await prisma.rateLimitRecord.findUnique({
     where: { key },
   });
@@ -58,7 +51,6 @@ async function checkRateLimit(
   const existingResetAt = existing?.resetAt ? existing.resetAt.getTime() : 0;
 
   if (!existing || existingResetAt <= now) {
-    // Janela expirada ou não existe: criar novo registro
     await prisma.rateLimitRecord.create({
       data: {
         key,
@@ -73,7 +65,6 @@ async function checkRateLimit(
     return { allowed: false, remaining: 0, resetAt: existingResetAt };
   }
 
-  // Incrementar contador
   await prisma.rateLimitRecord.update({
     where: { key },
     data: { count: existing.count + 1 },
@@ -83,13 +74,11 @@ async function checkRateLimit(
 }
 
 function getRateLimitConfig(pathname: string): { max: number; windowMs: number } | null {
-  // Verificar rotas de autenticação específicas primeiro
   for (const [path, config] of Object.entries(ENDPOINT_LIMITS)) {
     if (pathname === path || pathname.startsWith(`${path}/`)) {
       return config;
     }
   }
-  // Limite geral para outras rotas autenticadas
   if (PROTECTED.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return { max: RATE_LIMIT_MAX_GENERAL, windowMs: RATE_LIMIT_WINDOW_MS };
   }
@@ -100,7 +89,6 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const ip = getClientIp(request);
 
-  // Rate limiting em rotas sensíveis
   const limitConfig = getRateLimitConfig(pathname);
   if (limitConfig) {
     const rateLimitKey = `rl:${pathname}:${ip}`;
@@ -131,6 +119,8 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
+  // Prisma requires the Node.js runtime; the Edge runtime is not supported.
+  runtime: "nodejs",
   matcher: [
     "/dashboard/:path*",
     "/app/:path*",
