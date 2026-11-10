@@ -173,13 +173,13 @@ model UserSession {
 // ------------------------------------------------------------
 
 model UserTwoFactor {
-  id          String   @id @default(cuid())
-  userId      String   @unique
-  enabled     Boolean  @default(false)
-  secret      String // base32 secreto TOTP
-  backupCodes String // JSON array de códigos de backup
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  enabled        Boolean  @default(false)
+  secretEncrypted String // Segredo base32 TOTP criptografado (AES-256-GCM)
+  backupCodesHash String // Hash SHA-256 dos códigos de backup (usado para verificação, não recuperação)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -249,7 +249,9 @@ model OrganizationMember {
   role           RoleName     @default(MEMBER)
   status         MemberStatus @default(ATIVO)
   jobTitle       String?
-  cpf            String? // CAMPO ADD: CPF do colaborador
+  cpf            String? // Campo legado em texto puro — será migrado para cpfEncrypted
+  cpfEncrypted   String? // CPF criptografado (AES-256-GCM)
+  cpfHmacIndex   String? // Índice HMAC para busca segura por CPF
   phone          String?
   departmentId   String?
   managerId      String?
@@ -277,6 +279,7 @@ model OrganizationMember {
   @@index([userId])
   @@index([departmentId])
   @@index([managerId])
+  @@index([cpfHmacIndex])
   @@map("organization_members")
 }
 
@@ -1115,4 +1118,21 @@ model SecurityIncident {
   @@index([status])
   @@index([severity])
   @@map("security_incidents")
+}
+
+// ------------------------------------------------------------
+// RATE LIMITING (armazenado no banco para funcionar em serverless)
+// ------------------------------------------------------------
+
+model RateLimitRecord {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  count     Int      @default(1)
+  resetAt   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([key])
+  @@index([resetAt])
+  @@map("rate_limit_records")
 }

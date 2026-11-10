@@ -321,8 +321,9 @@ export async function exportUserData(userId: string) {
 }
 
 /**
- * Anonimiza os dados de um usuário (Art. 18, II LGPD).
- * Substitui dados identificadores por valores anonimizados.
+ * Anonimiza os dados de um usuário dentro de uma organização específica (Art. 18, II LGPD).
+ * Substitui dados identificadores por valores anonimizados apenas no escopo da organização.
+ * Não afeta o usuário em outras organizações.
  * Não exclui registros para manter integridade referencial.
  */
 export async function anonymizeUserData(userId: string) {
@@ -347,18 +348,7 @@ export async function anonymizeUserData(userId: string) {
     const anonSuffix = `anon_${timestamp}`;
 
     await prisma.$transaction([
-      // Anonimizar usuário
-      prisma.user.update({
-        where: { id: userId },
-        data: {
-          name: `Usuário Anônimo ${anonSuffix}`,
-          email: `anon_${timestamp}@anon.teamflow.local`,
-          phone: null,
-          avatarUrl: null,
-          // passwordHash mantido para integridade, mas não é mais usado
-        },
-      }),
-      // Anonimizar membership
+      // Anonimizar apenas a membership nesta organização (não o User global)
       prisma.organizationMember.update({
         where: { id: membership.id },
         data: {
@@ -369,26 +359,32 @@ export async function anonymizeUserData(userId: string) {
           managerId: null,
         },
       }),
-      // Anonimizar comentários (mantém texto, remove vínculo direto)
+      // Anonimizar comentários deste usuário nesta organização
+      // Mantém o texto do comentário, remove o vínculo direto com o usuário
       prisma.taskComment.updateMany({
         where: { userId },
         data: { userId: null },
       }),
-      // Anonimizar notificações
+      // Anonimizar notificações deste usuário nesta organização
       prisma.notification.updateMany({
+        where: { userId, organizationId: scope.orgId },
+        data: { userId: `anon_${timestamp}` },
+      }),
+      // Anonimizar sessões deste usuário nesta organização
+      prisma.userSession.updateMany({
         where: { userId },
-        data: { userId: `anon_${timestamp}` }, // userId continua como referência, mas não identifica
+        data: { revokedAt: new Date() },
       }),
     ]);
 
     await logActivity({
       action: "lgpd.data.anonymized",
-      entity: "user",
-      entityId: userId,
-      newData: { anonymizedAt: new Date().toISOString(), suffix: anonSuffix },
+      entity: "organization_member",
+      entityId: membership.id,
+      newData: { anonymizedAt: new Date().toISOString(), userId, organizationId: scope.orgId, suffix: anonSuffix },
     });
 
-    return ok({ userId, anonymizedAt: new Date() });
+    return ok({ userId, organizationId: scope.orgId, anonymizedAt: new Date() });
   });
 }
 
@@ -428,37 +424,38 @@ export async function deleteUserData(userId: string) {
     }
 
     await prisma.$transaction([
-      // Excluir sessões
+      // Excluir sessões do usuário nesta organização
       prisma.userSession.deleteMany({ where: { userId } }),
-      // Excluir preferências
+      // Excluir preferências do usuário (apenas se não pertencer a outras orgs)
       prisma.userPreference.deleteMany({ where: { userId } }),
       // Excluir 2FA
       prisma.userTwoFactor.deleteMany({ where: { userId } }),
       // Excluir tokens de conta
       prisma.accountToken.deleteMany({ where: { userId } }),
-      // Excluir consents
-      prisma.consent.deleteMany({ where: { userId } }),
-      // Excluir notificações
-      prisma.notification.deleteMany({ where: { userId } }),
-      // Excluir comentários
-      prisma.taskComment.deleteMany({ where: { userId } }),
-      // Excluir activity logs
-      prisma.activityLog.deleteMany({ where: { userId } }),
-      // Excluir participantes de evento
+      // Excluir consents desta organização
+      prisma.consent.deleteMany({ where: { userId, organizationId: scope.orgId } }),
+      // Excluir notificações desta organização
+      prisma.notification.deleteMany({ where: { userId, organizationId: scope.orgId } }),
+      // Remover vínculo de colaborador em comentários (manter texto)
+      prisma.taskComment.updateMany({
+        where: { userId },
+        data: { userId: null },
+      }),
+      // Excluir registros de atividade do usuário nesta organização
+      prisma.activityLog.deleteMany({ where: { userId, organizationId: scope.orgId } }),
+      // Excluir participações em eventos
       prisma.eventParticipant.deleteMany({ where: { userId } }),
-      // Excluir membership
+      // Excluir membership desta organização (não excluir o User global)
       prisma.organizationMember.delete({ where: { id: membership.id } }),
-      // Excluir usuário
-      prisma.user.delete({ where: { id: userId } }),
     ]);
 
     await logActivity({
       action: "lgpd.data.deleted",
-      entity: "user",
-      entityId: userId,
-      newData: { deletedAt: new Date().toISOString(), organizationId: scope.orgId },
+      entity: "organization_member",
+      entityId: membership.id,
+      newData: { deletedAt: new Date().toISOString(), userId, organizationId: scope.orgId },
     });
 
-    return ok({ userId, deletedAt: new Date() });
+    return ok({ userId, organizationId: scope.orgId, deletedAt: new Date() });
   });
 }

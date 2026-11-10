@@ -21,6 +21,7 @@ import {
 import { logActivity } from "@/server/activity";
 import { hashPassword } from "@/lib/auth";
 import { issueAccountToken } from "@/server/account-token";
+import { encrypt, generateHmacIndex, validateCpf } from "@/lib/encryption";
 
 const normalizeEmail = (e: string) => e.trim().toLowerCase();
 
@@ -249,6 +250,17 @@ export async function addCollaborator(input: unknown) {
       }
     }
 
+    // Criptografar CPF se fornecido
+    let cpfEncrypted: string | null = null;
+    let cpfHmacIndex: string | null = null;
+    if (data.cpf) {
+      if (!validateCpf(data.cpf)) {
+        throw new AppError("INVALID_CPF", "CPF inválido.", 400);
+      }
+      cpfEncrypted = await encrypt(data.cpf);
+      cpfHmacIndex = generateHmacIndex(data.cpf);
+    }
+
     // Usuário + membership + token de primeiro acesso na MESMA transação.
     const { member, createdUser, rawToken } = await prisma.$transaction(async (tx) => {
       let userId: string;
@@ -276,7 +288,9 @@ export async function addCollaborator(input: unknown) {
           userId,
           role,
           jobTitle: data.jobTitle || role || null,
-          cpf: data.cpf || null,
+          cpf: data.cpf || null, // Mantido temporariamente para migração
+          cpfEncrypted,
+          cpfHmacIndex,
           phone: data.phone || null,
           departmentId: data.departmentId || null,
           managerId: data.managerId || null,

@@ -1,6 +1,7 @@
 "use server";
 
 import { cookies, headers } from "next/headers";
+import { SignJWT, jwtVerify } from "jose";
 import { prisma } from "@/lib/prisma";
 import {
   createSession,
@@ -10,6 +11,7 @@ import {
   hashPassword,
   verifyPassword,
   requireSessionApi,
+  secretKey,
 } from "@/lib/auth";
 import { handleAction, AppError, ok } from "@/lib/errors";
 import {
@@ -24,6 +26,8 @@ import { ensureCatalogs } from "@/lib/catalog";
 import { logActivity } from "@/server/activity";
 import { issueAccountToken, consumeAccountToken } from "@/server/account-token";
 import { sendPasswordResetEmail } from "@/lib/email";
+import { decrypt } from "@/lib/encryption";
+import { validateTOTP, validateBackupCode } from "@/server/two-factor-actions";
 
 const normalizeEmail = (e: string) => e.trim().toLowerCase();
 
@@ -74,6 +78,38 @@ export async function login(input: unknown) {
     if (!user || !valid) {
       throw new AppError("INVALID_CREDENTIALS", "E-mail ou senha incorretos.", 401);
     }
+
+    // Verificar se o usuário tem 2FA ativado
+    const tfa = await prisma.userTwoFactor.findUnique({
+      where: { userId: user.id },
+      select: { enabled: true },
+    });
+
+    if (tfa?.enabled) {
+      // 2FA obrigatório: criar sessão temporária (2FA pendente)
+      // O token temporário é válido por 5 minutos e só permite completar o 2FA
+      const tempToken = await new SignJWT({
+        sub: user.id,
+        email: user.email,
+        name: user.name,
+        purpose: "2fa_pending",
+      })
+        .setProtectedHeader({ alg: "HS256" })
+        .setSubject(user.id)
+        .setIssuedAt()
+        .setExpirationTime("5m")
+        .sign(secretKey());
+
+      return {
+        id: user.id,
+        name: user.name,
+        hasOrg: false,
+        twoFactorRequired: true,
+        tempToken,
+        message: "Segundo fator de autenticação necessário.",
+      };
+    }
+
     // Respeita a organização salva em tf_org; só cai para a mais antiga se
     // o cookie não apontar para uma organização da qual o usuário faz parte.
     const store = await cookies();
@@ -99,6 +135,85 @@ export async function login(input: unknown) {
       await sessionMeta()
     );
     return { id: user.id, name: user.name, hasOrg: Boolean(active) };
+  });
+}
+
+/**
+ * Completa o 2FA após login com senha.
+ * Requer um tempToken válido (gerado durante o login quando 2FA está ativado).
+ */
+export async function completeTwoFactorLogin(input: { tempToken: string; token: string }) {
+  return handleAction(async () => {
+    const { tempToken, token } = input;
+
+    // Verificar o token temporário
+    let payload: { sub: string; email: string; name: string; purpose: string };
+    try {
+      const { payload: p } = await jwtVerify(tempToken, secretKey());
+      payload = p as { sub: string; email: string; name: string; purpose: string };
+      if (payload.purpose !== "2fa_pending") {
+        throw new AppError("INVALID_TOKEN", "Token inválido.", 400);
+      }
+    } catch {
+      throw new AppError("INVALID_TOKEN", "Token temporário inválido ou expirado.", 400);
+    }
+
+    // Verificar se o usuário tem 2FA ativado
+    const tfa = await prisma.userTwoFactor.findUnique({
+      where: { userId: payload.sub },
+    });
+    if (!tfa?.enabled || !tfa.secretEncrypted) {
+      throw new AppError("NOT_FOUND", "2FA não está configurado para este usuário.", 404);
+    }
+
+    // Descriptografar o segredo e validar o código TOTP
+    const secret = await decrypt(tfa.secretEncrypted);
+    if (!(await validateTOTP(secret, token, 1))) {
+      // Verificar se é um código de backup
+      const codesHash: string[] = JSON.parse(tfa.backupCodesHash || "[]");
+      const result = await validateBackupCode(token.trim(), codesHash);
+      if (!result.valid) {
+        throw new AppError("INVALID_TOKEN", "Código de verificação inválido.", 400);
+      }
+      // Atualizar hashes dos códigos de backup removendo o usado
+      await prisma.userTwoFactor.update({
+        where: { userId: payload.sub },
+        data: { backupCodesHash: JSON.stringify(result.remainingHashes) },
+      });
+    }
+
+    // Buscar organização ativa do usuário
+    const store = await cookies();
+    const requestedId = store.get("tf_org")?.value;
+    const membership = requestedId
+      ? await prisma.organizationMember.findFirst({
+          where: { userId: payload.sub, organizationId: requestedId, status: "ATIVO" },
+          select: { organizationId: true },
+        })
+      : null;
+    const active = membership ?? (await prisma.organizationMember.findFirst({
+      where: { userId: payload.sub, status: "ATIVO" },
+      orderBy: { joinedAt: "asc" },
+      select: { organizationId: true },
+    }));
+
+    // Criar sessão completa após validação do 2FA
+    await createSession(
+      {
+        sub: payload.sub,
+        email: payload.email,
+        name: payload.name,
+        orgId: active?.organizationId,
+      },
+      await sessionMeta()
+    );
+
+    return {
+      id: payload.sub,
+      name: payload.name,
+      hasOrg: Boolean(active),
+      twoFactorCompleted: true,
+    };
   });
 }
 

@@ -92,7 +92,7 @@ describe("Mascaramento de dados (LGPD - Fase 1)", () => {
 
 describe("HMAC para índice de busca (LGPD - Fase 3.1)", () => {
   beforeEach(() => {
-    process.env.ENCRYPTION_HMAC_KEY = "test-hmac-key-32-chars-long!!";
+    process.env.ENCRYPTION_HMAC_KEY = "test-hmac-key-32-chars-long!!!!!";
   });
 
   it("gera HMAC determinístico para mesmo valor", () => {

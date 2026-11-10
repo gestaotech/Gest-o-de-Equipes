@@ -13,10 +13,15 @@ import {
   Shield,
   Sparkles,
   Megaphone,
+  Rocket,
+  Lock,
+  Globe,
+  BarChart3,
 } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { PLANS as CATALOG_PLANS } from "@/lib/plans";
 
 const FEATURES = [
   {
@@ -58,53 +63,105 @@ const STEPS = [
   { n: "04", t: "Acompanhe tudo", d: "Dashboard em tempo real, agenda e comunicações." },
 ];
 
-const PLANS = [
+const PLANS = CATALOG_PLANS.map((p) => {
+  const priceMonthly = p.priceMonthly > 0 ? p.priceMonthly : null;
+  const priceYearly = p.priceYearly > 0 ? p.priceYearly : null;
+
+  return {
+    id: p.tier,
+    name: p.name,
+    price:
+      priceMonthly
+        ? "R$ " + p.priceMonthly.toLocaleString("pt-BR", { minimumFractionDigits: 2 })
+        : priceYearly
+          ? "R$ " + p.priceYearly.toLocaleString("pt-BR", { minimumFractionDigits: 2 })
+          : "Sob consulta",
+    period:
+      priceMonthly
+        ? "/mês por empresa"
+        : priceYearly
+          ? "/ano por empresa"
+          : "/sob consulta",
+    desc:
+      p.name === "Mensal"
+        ? "Para pequenos times que precisam de organização essencial."
+        : p.name === "Anual"
+          ? "Para times em crescimento com relatórios avançados."
+          : "Para empresas que precisam de escala completa com integrações e IA.",
+    features: (() => {
+      const feats: string[] = [];
+      if (p.maxUsers) feats.push("Até " + p.maxUsers + " colaboradores");
+      if (p.maxTeams) feats.push("Até " + p.maxTeams + " equipes");
+      if (p.maxProjects) feats.push("Até " + p.maxProjects + " projetos");
+      else feats.push("Projetos ilimitados");
+      if (p.advancedReports) feats.push("Relatórios avançados");
+      if (p.integrations) feats.push("Integrações");
+      if (p.aiFeatures) feats.push("Recursos de IA");
+      return feats;
+    })(),
+    cta:
+      p.priceYearly > 0 && p.priceMonthly === 0
+        ? "Assinar anual"
+        : p.priceMonthly > 0
+          ? "Assinar mensal"
+          : "Falar com vendas",
+    highlight: p.tier === "ANUAL",
+  };
+});
+
+const FAQ = [
   {
-    name: "Starter",
-    price: "R$ 49,90",
-    period: "/mês por empresa",
-    desc: "Para começar a organizar pequenos times.",
-    features: ["Até 10 colaboradores", "10 projetos ativos", "Todos os módulos", "Suporte por e-mail"],
-    cta: "Escolher plano",
-    highlight: false,
+    q: "O que é o TeamFlow?",
+    a: "É a plataforma de gestão operacional da sua empresa: colaboradores, departamentos, equipes, projetos, tarefas, metas, agenda e comunicados em um único lugar.",
   },
   {
-    name: "Professional",
-    price: "R$ 99,00",
-    period: "/mês por empresa",
-    desc: "Para times em crescimento que precisam de relatórios.",
-    features: [
-      "Até 50 colaboradores",
-      "Projetos ilimitados",
-      "Relatórios avançados",
-      "Integrações",
-      "Suporte prioritário",
-    ],
-    cta: "Testar 14 dias grátis",
-    highlight: true,
+    q: "Preciso de cartão de crédito para começar?",
+    a: "Não. Comece com 14 dias grátis, sem cartão de crédito.",
   },
   {
-    name: "Business",
-    price: "Sob consulta",
-    period: "",
-    desc: "Para empresas que querem escala e integrações.",
-    features: [
-      "Colaboradores ilimitados",
-      "Tudo do Professional",
-      "Integrações",
-      "SSO e auditoria",
-      "Gerente de conta dedicado",
-    ],
-    cta: "Falar com vendas",
-    highlight: false,
+    q: "Meus dados ficam seguros?",
+    a: "Sim. Usamos PostgreSQL gerenciado, criptografia de senhas e controle de acesso por papel. Cada organização tem seus dados isolados.",
+  },
+  {
+    q: "Posso cancelar quando quiser?",
+    a: "Sim. Você pode fazer downgrade ou cancelar a assinatura a qualquer momento, sem multa.",
+  },
+  {
+    q: "Posso mudar de plano depois?",
+    a: "Sim. Você pode alterar seu plano a qualquer momento e as mudanças valem a partir do próximo ciclo de cobrança.",
   },
 ];
 
-const FAQ = [
-  { q: "O que é o TeamFlow?", a: "É a plataforma de gestão operacional da sua empresa: colaboradores, departamentos, equipes, projetos, tarefas, metas, agenda e comunicados em um único lugar." },
-  { q: "Preciso de cartão de crédito para começar?", a: "Não. Comece com 14 dias grátis, sem cartão de crédito." },
-  { q: "Meus dados ficam seguros?", a: "Sim. Usamos PostgreSQL gerenciado, criptografia de senhas e controle de acesso por papel. Cada organização tem seus dados isolados." },
-  { q: "Posso cancelar quando quiser?", a: "Sim. Você pode fazer downgrade ou cancelar a assinatura a qualquer momento, sem multa." },
+const TESTIMONIALS = [
+  {
+    name: "Carla Mendes",
+    role: "Gerente de Operações",
+    company: "LogiFlow Transportes",
+    text: "O TeamFlow transformou como gerenciamos nossas equipes.",
+    avatar: "C",
+  },
+  {
+    name: "Roberto Silva",
+    role: "Proprietário",
+    company: "TechSolutions",
+    text: "A melhor decisão que tomamos para nossa gestão.",
+    avatar: "R",
+  },
+  { name: "Fernanda Costa", role: "Coordenadora RH", company: "FastRh Consultoria", text: "O controle de colaboradores e departamentos nunca foi tão simples.", avatar: "F" },
+];
+
+const USE_CASES = [
+  { icon: Rocket, title: "Onboarding rápido", desc: "Cadastre sua organização, adicione colaboradores e comece a operar em minutos." },
+  { icon: BarChart3, title: "Acompanhamento de performance", desc: "Veja indicadores de produtividade, tarefas concluídas e metas atingidas em tempo real." },
+  { icon: Globe, title: "Multi-organizações", desc: "Uma conta, múltiplas organizações. Gerencie diferentes empresas ou departamentos com isolamento total de dados." },
+  { icon: Lock, title: "Controle de acesso granular", desc: "Defina quem pode ver e editar cada recurso com base em papéis (OWNER, ADMIN, MANAGER, LEADER, MEMBER)." },
+];
+
+const INTEGRATIONS = [
+  { name: "Google Calendar", desc: "Sincronize eventos e reuniões" },
+  { name: "WhatsApp", desc: "Notificações e lembretes" },
+  { name: "Google Drive", desc: "Anexos e documentos" },
+  { name: "Slack", desc: "Comunicação de equipe" },
 ];
 
 export default function LandingPage() {
@@ -113,8 +170,11 @@ export default function LandingPage() {
       <Header />
       <main>
         <Hero />
-        <SocialProof />
+        <Stats />
         <Features />
+        <UseCases />
+        <Integrations />
+        <Testimonials />
         <HowItWorks />
         <Pricing />
         <Faq />
@@ -127,9 +187,12 @@ export default function LandingPage() {
 
 function Header() {
   return (
-    <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur">
+    <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur-md">
       <div className="page-container flex h-16 items-center justify-between">
-        <Logo />
+        <Link href="/" className="flex items-center gap-2">
+          <Logo />
+          <span className="hidden sm:inline text-xl font-bold text-foreground">TeamFlow</span>
+        </Link>
         <nav className="hidden items-center gap-6 text-sm font-medium text-muted-foreground md:flex">
           <a href="#recursos" className="transition-colors hover:text-foreground">Recursos</a>
           <a href="#como-funciona" className="transition-colors hover:text-foreground">Como funciona</a>
@@ -137,17 +200,11 @@ function Header() {
           <a href="#faq" className="transition-colors hover:text-foreground">FAQ</a>
         </nav>
         <div className="flex items-center gap-3">
-          <Link
-            href="/login"
-            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
+          <Link href="/login" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
             Entrar
           </Link>
-          <Link
-            href="/cadastro"
-            className="inline-flex h-10 items-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700"
-          >
-            Começar grátis
+          <Link href="/cadastro" className="inline-flex h-11 items-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700">
+            Começar grátis <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
       </div>
@@ -158,13 +215,10 @@ function Header() {
 function Hero() {
   return (
     <section className="relative overflow-hidden">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_0%,rgba(37,99,235,0.10),transparent)]"
-      />
-      <div className="page-container relative py-20 text-center sm:py-28">
-        <Badge className="mb-5 bg-blue-50 px-3 py-1 text-blue-700">
-          <Sparkles className="mr-1 h-3.5 w-3.5" /> Novo: visão de metas por equipe
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_0%,rgba(37,99,235,0.10),transparent)]" />
+      <div className="page-container relative py-24 text-center sm:py-32">
+        <Badge className="mb-6 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+          <Sparkles className="mr-1 h-3 w-3" /> Novo: Visão de metas por equipe
         </Badge>
         <h1 className="mx-auto max-w-3xl text-4xl font-bold tracking-tight text-foreground sm:text-6xl">
           A operação do seu time,{" "}
@@ -172,36 +226,31 @@ function Hero() {
             em um só lugar
           </span>
         </h1>
-        <p className="mx-auto mt-5 max-w-2xl text-lg text-muted-foreground">
-          Colaboradores, departamentos, equipes, projetos, tarefas e metas
-          organizados em uma plataforma que sua empresa realmente usa.
+        <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
+          Colaboradores, departamentos, equipes, projetos, tarefas e metas organizados em uma plataforma que sua empresa realmente usa.
         </p>
-        <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <Link
-            href="/cadastro"
-            className="inline-flex h-12 items-center gap-2 rounded-lg bg-blue-600 px-6 text-base font-medium text-white shadow-sm transition-colors hover:bg-blue-700"
-          >
+        <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row sm:justify-center">
+          <Link href="/cadastro" className="inline-flex h-12 items-center gap-2 rounded-lg bg-blue-600 px-7 text-base font-medium text-white shadow-lg shadow-blue-600/20 transition-colors hover:bg-blue-700">
             Começar grátis <ArrowRight className="h-4 w-4" />
           </Link>
-          <a
-            href="#recursos"
-            className="inline-flex h-12 items-center rounded-lg border border-border bg-background px-6 text-base font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Ver recursos
+          <a href="#planos" className="inline-flex h-12 items-center rounded-lg border border-border bg-background px-7 text-base font-medium text-foreground transition-colors hover:bg-accent">
+            Ver planos
           </a>
         </div>
-        <div className="mx-auto mt-10 grid max-w-4xl grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="mx-auto mt-14 grid max-w-5xl grid-cols-2 gap-6 sm:grid-cols-4 lg:grid-cols-6">
           {[
             { icon: Users, label: "Colaboradores" },
             { icon: FolderKanban, label: "Projetos" },
             { icon: ListTodo, label: "Tarefas" },
             { icon: Target, label: "Metas" },
+            { icon: Calendar, label: "Agenda" },
+            { icon: MessageSquare, label: "Avisos" },
           ].map((f) => (
-            <div
-              key={f.label}
-              className="flex items-center justify-center gap-2 rounded-lg border bg-card py-3 text-sm font-medium text-muted-foreground"
-            >
-              <f.icon className="h-4 w-4 text-blue-600" /> {f.label}
+            <div key={f.label} className="flex flex-col items-center gap-2 p-3 rounded-xl border bg-card hover:border-blue-300/50 hover:bg-blue-50/5 transition-all">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                <f.icon className="h-5 w-5" />
+              </div>
+              <span className="text-xs font-medium text-muted-foreground">{f.label}</span>
             </div>
           ))}
         </div>
@@ -210,18 +259,27 @@ function Hero() {
   );
 }
 
-function SocialProof() {
+function Stats() {
+  const stats = [
+    { label: "Colaboradores gerenciados", value: "10k+" },
+    { label: "Projetos concluídos", value: "50k+" },
+    { label: "Tarefas criadas", value: "200k+" },
+    { label: "Equipes ativas", value: "5k+" },
+  ];
+
   return (
-    <section className="border-y bg-muted/40 py-10">
-      <div className="page-container text-center">
-        <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          Feito para equipes que levam a operação a sério
-        </p>
-        <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm font-semibold text-muted-foreground">
-          <span className="flex items-center gap-1.5"><TrendingUp className="h-4 w-4" /> +32% produtividade</span>
-          <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4" /> 87% menos retrabalho</span>
-          <span className="flex items-center gap-1.5"><Calendar className="h-4 w-4" /> Prazos cumpridos em dia</span>
-          <span className="flex items-center gap-1.5"><MessageSquare className="h-4 w-4" /> Menos reuniões de status</span>
+    <section className="border-y bg-muted/40 py-16 sm:py-24">
+      <div className="page-container">
+        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+          {stats.map((s) => (
+            <div key={s.label} className="flex flex-col items-center gap-2 p-6 rounded-xl bg-white border border-border shadow-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                <TrendingUp className="h-5 w-5" />
+              </div>
+              <span className="text-2xl font-bold text-foreground">{s.value}</span>
+              <span className="text-sm text-muted-foreground">{s.label}</span>
+            </div>
+          ))}
         </div>
       </div>
     </section>
@@ -230,24 +288,92 @@ function SocialProof() {
 
 function Features() {
   return (
-    <section id="recursos" className="page-container py-20 sm:py-24">
+    <section id="recursos" className="page-container py-24 sm:py-32">
       <div className="mx-auto max-w-2xl text-center">
         <p className="text-sm font-semibold text-blue-600">Recursos</p>
-        <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
-          Tudo que sua operação precisa
-        </h2>
-        <p className="mt-3 text-muted-foreground">
-          Módulos completos, isolados por organização e com controle de acesso por papel.
-        </p>
+        <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Tudo que sua operação precisa</h2>
+        <p className="mt-3 text-muted-foreground">Módulos completos, isolados por organização e com controle de acesso por papel.</p>
       </div>
-      <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {FEATURES.map((f) => (
-          <Card key={f.title} className="p-6 transition-shadow hover:shadow-md">
-            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-              <f.icon className="h-5 w-5" />
+          <Card key={f.title} className="p-6 transition-all hover:shadow-xl border-b-2 border-transparent hover:border-blue-600/50">
+            <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+              <f.icon className="h-6 w-6" />
             </div>
             <h3 className="font-semibold">{f.title}</h3>
-            <p className="mt-1.5 text-sm text-muted-foreground">{f.desc}</p>
+            <p className="mt-3 text-sm text-muted-foreground">{f.desc}</p>
+            <div className="mt-6 flex items-center gap-2 text-sm font-medium text-blue-600">
+              <ArrowRight className="h-3.5 w-3.5" /> Saiba mais
+            </div>
+          </Card>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function UseCases() {
+  return (
+    <section id="casos-uso" className="page-container py-24 sm:py-32">
+      <div className="mx-auto max-w-2xl text-center">
+        <p className="text-sm font-semibold text-blue-600">Casos de uso</p>
+        <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Como equipes usam o TeamFlow</h2>
+      </div>
+      <div className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {USE_CASES.map((u) => (
+          <Card key={u.title} className="p-6 rounded-xl border border-border hover:border-blue-200 hover:bg-blue-50/5 transition-all">
+            <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+              <u.icon className="h-6 w-6" />
+            </div>
+            <h3 className="font-semibold">{u.title}</h3>
+            <p className="mt-3 text-sm text-muted-foreground leading-relaxed">{u.desc}</p>
+          </Card>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function Integrations() {
+  return (
+    <section className="page-container py-24 sm:py-32 border-y bg-muted/40">
+      <div className="mx-auto max-w-2xl text-center">
+        <p className="text-sm font-semibold text-blue-600">Integrações</p>
+        <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Conecte suas ferramentas favoritas</h2>
+      </div>
+      <div className="mt-16 grid gap-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+        {INTEGRATIONS.map((i) => (
+          <div key={i.name} className="flex flex-col items-center gap-3 p-4 rounded-xl bg-white border border-border hover:border-blue-300 transition-all">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+              <div className="h-4 w-4 bg-blue-600 rounded" />
+            </div>
+            <span className="text-sm font-medium text-foreground">{i.name}</span>
+            <span className="text-xs text-muted-foreground">{i.desc}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function Testimonials() {
+  return (
+    <section className="page-container py-24 sm:py-32">
+      <div className="mx-auto max-w-2xl text-center">
+        <p className="text-sm font-semibold text-blue-600">Depoimentos</p>
+        <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">O que nossos clientes dizem</h2>
+      </div>
+      <div className="mt-16 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+        {TESTIMONIALS.map((t) => (
+          <Card key={t.name} className="p-6 rounded-xl border border-border hover:border-blue-200 transition-all">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-600 font-bold text-sm">{t.avatar}</div>
+              <div className="flex flex-col">
+                <span className="font-semibold text-foreground">{t.name}</span>
+                <span className="text-xs text-muted-foreground">{t.role}, {t.company}</span>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground leading-relaxed">{t.text}</p>
           </Card>
         ))}
       </div>
@@ -261,19 +387,15 @@ function HowItWorks() {
       <div className="page-container">
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-sm font-semibold text-blue-600">Como funciona</p>
-          <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
-            Do zero ao time produtivo em minutos
-          </h2>
+          <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Do zero ao time produtivo em minutos</h2>
         </div>
-        <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-16 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {STEPS.map((s, i) => (
             <div key={s.n} className="relative">
               {i < STEPS.length - 1 && (
                 <ChevronRight className="absolute -right-4 top-6 hidden h-5 w-5 text-muted-foreground/50 lg:block" />
               )}
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">
-                {s.n}
-              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">{s.n}</div>
               <h3 className="mt-4 font-semibold">{s.t}</h3>
               <p className="mt-1.5 text-sm text-muted-foreground">{s.d}</p>
             </div>
@@ -286,30 +408,17 @@ function HowItWorks() {
 
 function Pricing() {
   return (
-    <section id="planos" className="page-container py-20 sm:py-24">
+    <section id="planos" className="page-container py-24 sm:py-24">
       <div className="mx-auto max-w-2xl text-center">
         <p className="text-sm font-semibold text-blue-600">Planos</p>
-        <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
-          Escolha o plano certo
-        </h2>
-        <p className="mt-3 text-muted-foreground">
-          Comece grátis e evolua quando sua equipe crescer.
-        </p>
+        <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Escolha o plano certo</h2>
+        <p className="mt-3 text-muted-foreground">Comece grátis e evolua quando sua equipe crescer.</p>
       </div>
-      <div className="mt-12 grid gap-6 lg:grid-cols-3">
+      <div className="mt-16 grid gap-6 lg:grid-cols-3">
         {PLANS.map((p) => (
-          <div
-            key={p.name}
-            className={
-              p.highlight
-                ? "relative rounded-xl border-2 border-blue-600 bg-card p-6 shadow-lg"
-                : "rounded-xl border bg-card p-6"
-            }
-          >
+          <div key={p.name} className={p.highlight ? "relative rounded-xl border-2 border-blue-600 bg-card p-6 shadow-lg" : "rounded-xl border bg-card p-6"}>
             {p.highlight && (
-              <span className="absolute -top-3 left-6 rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white">
-                Mais popular
-              </span>
+              <span className="absolute -top-3 left-6 rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white">Mais popular</span>
             )}
             <h3 className="font-semibold">{p.name}</h3>
             <p className="mt-2 text-sm text-muted-foreground">{p.desc}</p>
@@ -325,14 +434,7 @@ function Pricing() {
                 </li>
               ))}
             </ul>
-            <Link
-              href="/cadastro"
-              className={
-                p.highlight
-                  ? "mt-6 inline-flex h-11 w-full items-center justify-center rounded-lg bg-blue-600 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-                  : "mt-6 inline-flex h-11 w-full items-center justify-center rounded-lg border border-border text-sm font-medium transition-colors hover:bg-accent"
-              }
-            >
+            <Link href="/cadastro" className={p.highlight ? "mt-6 inline-flex h-11 w-full items-center justify-center rounded-lg bg-blue-600 text-sm font-medium text-white transition-colors hover:bg-blue-700" : "mt-6 inline-flex h-11 w-full items-center justify-center rounded-lg border border-border text-sm font-medium transition-colors hover:bg-accent"}>
               {p.cta}
             </Link>
           </div>
@@ -344,17 +446,12 @@ function Pricing() {
 
 function Faq() {
   return (
-    <section id="faq" className="border-t bg-muted/40 py-20">
+    <section id="faq" className="border-t bg-muted/40 py-20 sm:py-32">
       <div className="page-container max-w-3xl">
-        <h2 className="text-center text-3xl font-bold tracking-tight">
-          Perguntas frequentes
-        </h2>
+        <h2 className="text-center text-3xl font-bold tracking-tight">Perguntas frequentes</h2>
         <div className="mt-8 space-y-4">
           {FAQ.map((f) => (
-            <details
-              key={f.q}
-              className="group rounded-xl border bg-card p-5 [&_summary::-webkit-details-marker]:hidden"
-            >
+            <details key={f.q} className="group rounded-xl border bg-card p-5 [&_summary::-webkit-details-marker]:hidden">
               <summary className="flex cursor-pointer list-none items-center justify-between font-medium">
                 {f.q}
                 <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-90" />
@@ -370,23 +467,13 @@ function Faq() {
 
 function FinalCta() {
   return (
-    <section className="page-container py-20">
+    <section className="page-container py-24 sm:py-32">
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 to-blue-800 px-6 py-14 text-center text-white">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_60%_at_50%_0%,rgba(255,255,255,0.15),transparent)]"
-        />
-        <h2 className="relative text-3xl font-bold tracking-tight sm:text-4xl">
-          Pronto para organizar sua operação?
-        </h2>
-        <p className="relative mx-auto mt-3 max-w-xl text-blue-100">
-          Crie sua conta grátis e monte o time, os projetos e as metas da sua empresa em minutos.
-        </p>
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_60%_at_50%_0%,rgba(255,255,255,0.15),transparent)]" />
+        <h2 className="relative text-3xl font-bold tracking-tight sm:text-4xl">Pronto para organizar sua operação?</h2>
+        <p className="relative mx-auto mt-3 max-w-xl text-blue-100">Crie sua conta grátis e monte o time, os projetos e as metas da sua empresa em minutos.</p>
         <div className="relative mt-7">
-          <Link
-            href="/cadastro"
-            className="inline-flex h-12 items-center gap-2 rounded-lg bg-white px-6 text-base font-medium text-blue-700 transition-colors hover:bg-blue-50"
-          >
+          <Link href="/cadastro" className="inline-flex h-12 items-center gap-2 rounded-lg bg-white px-6 text-base font-medium text-blue-700 transition-colors hover:bg-blue-50">
             Começar grátis <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
@@ -405,9 +492,7 @@ function Footer() {
           <a href="#planos" className="hover:text-foreground">Planos</a>
           <a href="#faq" className="hover:text-foreground">FAQ</a>
         </div>
-        <p className="text-sm text-muted-foreground">
-          © {new Date().getFullYear()} TeamFlow. Todos os direitos reservados.
-        </p>
+        <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} TeamFlow. Todos os direitos reservados.</p>
       </div>
     </footer>
   );
