@@ -24,12 +24,36 @@ import { Card } from "@/components/ui/card";
 import { PLANS as CATALOG_PLANS } from "@/lib/plans";
 
 const FEATURES = [
-  { icon: Users, title: "Colaboradores e departamentos", desc: "Organize o time com cargos, gestores, departamentos e status. Gerencie acesso por papéis." },
-  { icon: FolderKanban, title: "Projetos e tarefas", desc: "Planeje, priorize e acompanhe o que importa. Quadros, prazos e responsáveis em um só lugar." },
-  { icon: Target, title: "Metas e KPIs", desc: "Defina objetivos, acompanhe progresso e mantenha a equipe alinhada ao resultado." },
-  { icon: Calendar, title: "Agenda integrada", desc: "Reuniões, eventos de equipe e prazos de projetos na mesma visão de calendário." },
-  { icon: Megaphone, title: "Avisos e comunicados", desc: "Publique comunicados para a empresa, um time ou um colaborador, com notificações." },
-  { icon: Shield, title: "Segurança e RBAC", desc: "Controle granular de permissões por papel. Dados isolados por organização." },
+  {
+    icon: Users,
+    title: "Colaboradores e departamentos",
+    desc: "Organize o time com cargos, gestores, departamentos e status. Gerencie acesso por papéis.",
+  },
+  {
+    icon: FolderKanban,
+    title: "Projetos e tarefas",
+    desc: "Planeje, priorize e acompanhe o que importa. Quadros, prazos e responsáveis em um só lugar.",
+  },
+  {
+    icon: Target,
+    title: "Metas e KPIs",
+    desc: "Defina objetivos, acompanhe progresso e mantenha a equipe alinhada ao resultado.",
+  },
+  {
+    icon: Calendar,
+    title: "Agenda integrada",
+    desc: "Reuniões, eventos de equipe e prazos de projetos na mesma visão de calendário.",
+  },
+  {
+    icon: Megaphone,
+    title: "Avisos e comunicados",
+    desc: "Publique comunicados para a empresa, um time ou um colaborador, com notificações.",
+  },
+  {
+    icon: Shield,
+    title: "Segurança e RBAC",
+    desc: "Controle granular de permissões por papel. Dados isolados por organização.",
+  },
 ];
 
 const STEPS = [
@@ -39,44 +63,96 @@ const STEPS = [
   { n: "04", t: "Acompanhe tudo", d: "Dashboard em tempo real, agenda e comunicações." },
 ];
 
-const PLANS = CATALOG_PLANS.map((p) => ({
-  id: p.tier,
-  name: p.name,
-  price: p.priceMonthly > 0 ? "R$ " + p.priceMonthly.toLocaleString("pt-BR", { minimumFractionDigits: 2 }) : "Sob consulta",
-  period: p.priceMonthly > 0 ? "/mês por empresa" : p.priceYearly > 0 ? "/ano por empresa" : "/sob consulta",
-  desc: p.name === "Mensal" ? "Para pequenos times que precisam de organização essencial." : p.name === "Anual" ? "Para times em crescimento com relatórios avançados." : "Para empresas que precisam de escala completa com integrações e IA.",
-  features: (() => {
-    const feats: string[] = [];
-    if (p.maxUsers) feats.push("Até " + p.maxUsers + " colaboradores");
-    if (p.maxTeams) feats.push("Até " + p.maxTeams + " equipes");
-    if (p.maxProjects) feats.push("Até " + p.maxProjects + " projetos");
-    else feats.push("Projetos ilimitados");
-    if (p.advancedReports) feats.push("Relatórios avançados");
-    if (p.integrations) feats.push("Integrações");
-    if (p.aiFeatures) feats.push("Recursos de IA");
-    return feats;
-  })(),
-  cta: p.priceYearly > 0 && p.priceMonthly === 0 ? "Assinar anual" : p.priceMonthly > 0 ? "Assinar mensal" : "Falar com vendas",
-  highlight: p.tier === "ANUAL",
-}));
+const PLANS = CATALOG_PLANS.map((p) => {
+  const priceMonthly = p.priceMonthly > 0 ? p.priceMonthly : null;
+  const priceYearly = p.priceYearly > 0 ? p.priceYearly : null;
+
+  return {
+    id: p.tier,
+    name: p.name,
+    price:
+      priceMonthly
+        ? "R$ " + p.priceMonthly.toLocaleString("pt-BR", { minimumFractionDigits: 2 })
+        : priceYearly
+          ? "R$ " + p.priceYearly.toLocaleString("pt-BR", { minimumFractionDigits: 2 })
+          : "Sob consulta",
+    period:
+      priceMonthly
+        ? "/mês por empresa"
+        : priceYearly
+          ? "/ano por empresa"
+          : "/sob consulta",
+    desc:
+      p.name === "Mensal"
+        ? "Para pequenos times que precisam de organização essencial."
+        : p.name === "Anual"
+          ? "Para times em crescimento com relatórios avançados."
+          : "Para empresas que precisam de escala completa com integrações e IA.",
+    features: (() => {
+      const feats: string[] = [];
+      if (p.maxUsers) feats.push("Até " + p.maxUsers + " colaboradores");
+      if (p.maxTeams) feats.push("Até " + p.maxTeams + " equipes");
+      if (p.maxProjects) feats.push("Até " + p.maxProjects + " projetos");
+      else feats.push("Projetos ilimitados");
+      if (p.advancedReports) feats.push("Relatórios avançados");
+      if (p.integrations) feats.push("Integrações");
+      if (p.aiFeatures) feats.push("Recursos de IA");
+      return feats;
+    })(),
+    cta:
+      p.priceYearly > 0 && p.priceMonthly === 0
+        ? "Assinar anual"
+        : p.priceMonthly > 0
+          ? "Assinar mensal"
+          : "Falar com vendas",
+    highlight: p.tier === "ANUAL",
+  };
+});
 
 const FAQ = [
-  { q: "O que é o TeamFlow?", a: "É a plataforma de gestão operacional da sua empresa: colaboradores, departamentos, equipes, projetos, tarefas, metas, agenda e comunicados em um único lugar." },
-  { q: "Preciso de cartão de crédito para começar?", a: "Não. Comece com 14 dias grátis, sem cartão de crédito." },
-  { q: "Meus dados ficam seguros?", a: "Sim. Usamos PostgreSQL gerenciado, criptografia de senhas e controle de acesso por papel. Cada organização tem seus dados isolados." },
-  { q: "Posso cancelar quando quiser?", a: "Sim. Você pode fazer downgrade ou cancelar a assinatura a qualquer momento, sem multa." },
-  { q: "Posso mudar de plano depois?", a: "Sim. Você pode alterar seu plano a qualquer momento e as mudanças valem a partir do próximo ciclo de cobrança." },
+  {
+    q: "O que é o TeamFlow?",
+    a: "É a plataforma de gestão operacional da sua empresa: colaboradores, departamentos, equipes, projetos, tarefas, metas, agenda e comunicados em um único lugar.",
+  },
+  {
+    q: "Preciso de cartão de crédito para começar?",
+    a: "Não. Comece com 14 dias grátis, sem cartão de crédito.",
+  },
+  {
+    q: "Meus dados ficam seguros?",
+    a: "Sim. Usamos PostgreSQL gerenciado, criptografia de senhas e controle de acesso por papel. Cada organização tem seus dados isolados.",
+  },
+  {
+    q: "Posso cancelar quando quiser?",
+    a: "Sim. Você pode fazer downgrade ou cancelar a assinatura a qualquer momento, sem multa.",
+  },
+  {
+    q: "Posso mudar de plano depois?",
+    a: "Sim. Você pode alterar seu plano a qualquer momento e as mudanças valem a partir do próximo ciclo de cobrança.",
+  },
 ];
 
 const TESTIMONIALS = [
-  { name: "Carla Mendes", role: "Gerente de Operações", company: "LogiFlow Transportes", text: "O TeamFlow transformou como gerenciamos nossas equipes. Antes levávamos dias para alinhar tarefas, agora fazemos em minutos.", avatar: "C" },
-  { name: "Roberto Silva", role: "Proprietário", company: "TechSolutions", text: "A melhor decisão que tomamos para nossa gestão. Todos os colaboradores estão alinhados e os projetos saem no prazo.", avatar: "R" },
-  { name: "Fernanda Costa", role: "Coordenadora RH", company: "FastRh Consultoria", text: "O controle de colaboradores e departamentos nunca foi tão simples. Tudo em um só lugar, com segurança.", avatar: "F" },
+  {
+    name: "Carla Mendes",
+    role: "Gerente de Operações",
+    company: "LogiFlow Transportes",
+    text: "O TeamFlow transformou como gerenciamos nossas equipes.",
+    avatar: "C",
+  },
+  {
+    name: "Roberto Silva",
+    role: "Proprietário",
+    company: "TechSolutions",
+    text: "A melhor decisão que tomamos para nossa gestão.",
+    avatar: "R",
+  },
+  { name: "Fernanda Costa", role: "Coordenadora RH", company: "FastRh Consultoria", text: "O controle de colaboradores e departamentos nunca foi tão simples.", avatar: "F" },
 ];
 
 const USE_CASES = [
-  { icon: Rocket, title: "Onboarding rápido", desc: "Cadastre sua organização, adicione colaboradores e comece a operar em minutos, sem treinamento complexo." },
-  { icon: BarChart3, title: "Acompanhamento de performance", desc: "Veja indicadores de produtividade, tarefas concluídas e metas atingidas em tempo real no dashboard." },
+  { icon: Rocket, title: "Onboarding rápido", desc: "Cadastre sua organização, adicione colaboradores e comece a operar em minutos." },
+  { icon: BarChart3, title: "Acompanhamento de performance", desc: "Veja indicadores de produtividade, tarefas concluídas e metas atingidas em tempo real." },
   { icon: Globe, title: "Multi-organizações", desc: "Uma conta, múltiplas organizações. Gerencie diferentes empresas ou departamentos com isolamento total de dados." },
   { icon: Lock, title: "Controle de acesso granular", desc: "Defina quem pode ver e editar cada recurso com base em papéis (OWNER, ADMIN, MANAGER, LEADER, MEMBER)." },
 ];
@@ -139,14 +215,15 @@ function Header() {
 function Hero() {
   return (
     <section className="relative overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_0%,rgba(37,99,235,0.10),transparent)]" />
       <div className="page-container relative py-24 text-center sm:py-32">
         <Badge className="mb-6 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
           <Sparkles className="mr-1 h-3 w-3" /> Novo: Visão de metas por equipe
         </Badge>
         <h1 className="mx-auto max-w-3xl text-4xl font-bold tracking-tight text-foreground sm:text-6xl">
-          A operaçao do seu time,{" "}
+          A operação do seu time,{" "}
           <span className="bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">
-            em um so lugar
+            em um só lugar
           </span>
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
@@ -154,14 +231,21 @@ function Hero() {
         </p>
         <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row sm:justify-center">
           <Link href="/cadastro" className="inline-flex h-12 items-center gap-2 rounded-lg bg-blue-600 px-7 text-base font-medium text-white shadow-lg shadow-blue-600/20 transition-colors hover:bg-blue-700">
-            Comecar gratis <ArrowRight className="h-4 w-4" />
+            Começar grátis <ArrowRight className="h-4 w-4" />
           </Link>
           <a href="#planos" className="inline-flex h-12 items-center rounded-lg border border-border bg-background px-7 text-base font-medium text-foreground transition-colors hover:bg-accent">
             Ver planos
           </a>
         </div>
         <div className="mx-auto mt-14 grid max-w-5xl grid-cols-2 gap-6 sm:grid-cols-4 lg:grid-cols-6">
-          {[ { icon: Users, label: "Colaboradores" }, { icon: FolderKanban, label: "Projetos" }, { icon: ListTodo, label: "Tarefas" }, { icon: Target, label: "Metas" }, { icon: Calendar, label: "Agenda" }, { icon: MessageSquare, label: "Avisos" } ].map((f) => (
+          {[
+            { icon: Users, label: "Colaboradores" },
+            { icon: FolderKanban, label: "Projetos" },
+            { icon: ListTodo, label: "Tarefas" },
+            { icon: Target, label: "Metas" },
+            { icon: Calendar, label: "Agenda" },
+            { icon: MessageSquare, label: "Avisos" },
+          ].map((f) => (
             <div key={f.label} className="flex flex-col items-center gap-2 p-3 rounded-xl border bg-card hover:border-blue-300/50 hover:bg-blue-50/5 transition-all">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
                 <f.icon className="h-5 w-5" />
@@ -207,10 +291,8 @@ function Features() {
     <section id="recursos" className="page-container py-24 sm:py-32">
       <div className="mx-auto max-w-2xl text-center">
         <p className="text-sm font-semibold text-blue-600">Recursos</p>
-        <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Tudo que sua operacao precisa</h2>
-        <p className="mt-3 text-muted-foreground">
-          Modulos completos, isolados por organizacao e com controle de acesso por papel.
-        </p>
+        <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Tudo que sua operação precisa</h2>
+        <p className="mt-3 text-muted-foreground">Módulos completos, isolados por organização e com controle de acesso por papel.</p>
       </div>
       <div className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {FEATURES.map((f) => (
@@ -219,7 +301,7 @@ function Features() {
               <f.icon className="h-6 w-6" />
             </div>
             <h3 className="font-semibold">{f.title}</h3>
-            <p className="mt-1.5 text-sm text-muted-foreground">{f.desc}</p>
+            <p className="mt-3 text-sm text-muted-foreground">{f.desc}</p>
             <div className="mt-6 flex items-center gap-2 text-sm font-medium text-blue-600">
               <ArrowRight className="h-3.5 w-3.5" /> Saiba mais
             </div>
@@ -256,7 +338,7 @@ function Integrations() {
   return (
     <section className="page-container py-24 sm:py-32 border-y bg-muted/40">
       <div className="mx-auto max-w-2xl text-center">
-        <p className="text-sm font-semibold text-blue-600">Integracoes</p>
+        <p className="text-sm font-semibold text-blue-600">Integrações</p>
         <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Conecte suas ferramentas favoritas</h2>
       </div>
       <div className="mt-16 grid gap-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
@@ -330,7 +412,7 @@ function Pricing() {
       <div className="mx-auto max-w-2xl text-center">
         <p className="text-sm font-semibold text-blue-600">Planos</p>
         <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Escolha o plano certo</h2>
-        <p className="mt-3 text-muted-foreground">Comece gratis e evolua quando sua equipe crescer.</p>
+        <p className="mt-3 text-muted-foreground">Comece grátis e evolua quando sua equipe crescer.</p>
       </div>
       <div className="mt-16 grid gap-6 lg:grid-cols-3">
         {PLANS.map((p) => (
@@ -388,13 +470,11 @@ function FinalCta() {
     <section className="page-container py-24 sm:py-32">
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 to-blue-800 px-6 py-14 text-center text-white">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_60%_at_50%_0%,rgba(255,255,255,0.15),transparent)]" />
-        <h2 className="relative text-3xl font-bold tracking-tight sm:text-4xl">Pronto para organizar sua operacao?</h2>
-        <p className="relative mx-auto mt-3 max-w-xl text-blue-100">
-          Crie sua conta gratis e monte o time, os projetos e as metas da sua empresa em minutos.
-        </p>
+        <h2 className="relative text-3xl font-bold tracking-tight sm:text-4xl">Pronto para organizar sua operação?</h2>
+        <p className="relative mx-auto mt-3 max-w-xl text-blue-100">Crie sua conta grátis e monte o time, os projetos e as metas da sua empresa em minutos.</p>
         <div className="relative mt-7">
           <Link href="/cadastro" className="inline-flex h-12 items-center gap-2 rounded-lg bg-white px-6 text-base font-medium text-blue-700 transition-colors hover:bg-blue-50">
-            Comecar gratis <ArrowRight className="h-4 w-4" />
+            Começar grátis <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
       </div>
