@@ -1136,3 +1136,12 @@ model RateLimitRecord {
   @@index([resetAt])
   @@map("rate_limit_records")
 }
+
+model WebhookEvent {
+  id        String   @id
+  provider  String
+  eventType String
+  createdAt DateTime @default(now())
+
+  @@map("webhook_events")
+}
