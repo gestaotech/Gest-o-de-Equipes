@@ -1,25 +1,19 @@
 -- Alterar enum PlanTier: substituir STARTER, PROFESSIONAL, BUSINESS, ENTERPRISE por MENSAL, ANUAL, ECOSISTEMA
-
--- Passo 1: Adicionar novos valores ao enum
-ALTER TYPE "PlanTier" ADD VALUE IF NOT EXISTS 'MENSAL';
-ALTER TYPE "PlanTier" ADD VALUE IF NOT EXISTS 'ANUAL';
-ALTER TYPE "PlanTier" ADD VALUE IF NOT EXISTS 'ECOSISTEMA';
-
--- Passo 2: Atualizar planos existentes para os novos valores (se houver dados)
 -- Mapeamento: STARTER -> MENSAL, PROFESSIONAL -> ANUAL, BUSINESS/ENTERPRISE -> ECOSISTEMA
-UPDATE "plans" SET tier = 'MENSAL' WHERE tier = 'STARTER';
-UPDATE "plans" SET tier = 'ANUAL' WHERE tier = 'PROFESSIONAL';
-UPDATE "plans" SET tier = 'ECOSISTEMA' WHERE tier IN ('BUSINESS', 'ENTERPRISE');
+-- O mapeamento é feito no próprio ALTER COLUMN. Não usar ALTER TYPE ... ADD VALUE seguido de UPDATE
+-- com o novo valor: o PostgreSQL recusa ("unsafe use of new value") na mesma transação.
 
--- Passo 3: Remover valores antigos do enum
--- Em PostgreSQL, não é possível remover valores de um enum diretamente se houver dependências.
--- Como alternativa, recriamos o tipo com os novos valores.
--- Esta abordagem requer que não haja dados usando os valores antigos após o UPDATE acima.
+CREATE TYPE "PlanTier_new" AS ENUM ('MENSAL', 'ANUAL', 'ECOSISTEMA');
+
+ALTER TABLE "plans" ALTER COLUMN "tier" TYPE "PlanTier_new" USING (
+  CASE "tier"::text
+    WHEN 'STARTER' THEN 'MENSAL'
+    WHEN 'PROFESSIONAL' THEN 'ANUAL'
+    WHEN 'BUSINESS' THEN 'ECOSISTEMA'
+    WHEN 'ENTERPRISE' THEN 'ECOSISTEMA'
+  END
+)::"PlanTier_new";
 
 ALTER TYPE "PlanTier" RENAME TO "PlanTier_old";
-
-CREATE TYPE "PlanTier" AS ENUM ('MENSAL', 'ANUAL', 'ECOSISTEMA');
-
-ALTER TABLE "plans" ALTER COLUMN tier TYPE "PlanTier" USING tier::text::"PlanTier";
-
+ALTER TYPE "PlanTier_new" RENAME TO "PlanTier";
 DROP TYPE "PlanTier_old";
