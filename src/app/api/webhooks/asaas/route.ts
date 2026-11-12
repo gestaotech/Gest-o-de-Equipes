@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   isValidAsaasWebhookToken,
-  type AsaasWebhookPayment,
+  type AsaasWebhookBody,
 } from "@/lib/server/asaas/webhooks";
-import { applyAsaasPaymentEvent } from "@/server/asaas-webhook";
+import { applyAsaasWebhookEvent } from "@/server/asaas-webhook";
 
 export async function POST(request: Request) {
   const expectedToken = process.env.ASAAS_WEBHOOK_TOKEN ?? "";
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Token inválido." }, { status: 401 });
   }
 
-  let body: AsaasWebhookPayment;
+  let body: AsaasWebhookBody;
   try {
     body = await request.json();
   } catch {
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    await applyAsaasPaymentEvent(body);
+    await applyAsaasWebhookEvent(body);
     return NextResponse.json({ received: true });
   } catch {
     await prisma.webhookEvent.delete({ where: { id: eventId } }).catch(() => undefined);
