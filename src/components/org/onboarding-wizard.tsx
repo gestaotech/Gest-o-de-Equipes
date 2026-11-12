@@ -222,7 +222,7 @@ export function OnboardingWizard({ companyName }: { companyName: string }) {
           <div className="space-y-4 text-center">
             <MailPlus className="mx-auto h-10 w-10 text-blue-600" />
             <p className="text-muted-foreground">
-              Em breve você convidará seus colaboradores pela tela Colaboradores.
+              Depois de concluir, você pode adicionar colaboradores em <strong>Colaboradores</strong>.
               Por enquanto, siga em frente.
             </p>
           </div>
