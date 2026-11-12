@@ -249,7 +249,6 @@ model OrganizationMember {
   role           RoleName     @default(MEMBER)
   status         MemberStatus @default(ATIVO)
   jobTitle       String?
-  cpf            String? // Campo legado em texto puro — será migrado para cpfEncrypted
   cpfEncrypted   String? // CPF criptografado (AES-256-GCM)
   cpfHmacIndex   String? // Índice HMAC para busca segura por CPF
   phone          String?

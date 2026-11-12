@@ -353,7 +353,8 @@ export async function anonymizeUserData(userId: string) {
         where: { id: membership.id },
         data: {
           jobTitle: null,
-          cpf: null,
+          cpfEncrypted: null,
+          cpfHmacIndex: null,
           phone: null,
           departmentId: null,
           managerId: null,
