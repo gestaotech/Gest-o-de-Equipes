@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { login, completeTwoFactorLogin } from "@/server/auth-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,16 +13,14 @@ import type { ActionResult } from "@/lib/types";
 
 type Step = "password" | "totp";
 
-export function LoginForm() {
+export function LoginForm({ next }: { next?: string }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [step, setStep] = useState<Step>("password");
   const [tempToken, setTempToken] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   function redirectAfterLogin(hasOrg?: boolean) {
-    const next = searchParams.get("next");
     const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : null;
     router.push(safeNext ?? (hasOrg ? "/dashboard" : "/criar-org"));
     router.refresh();
