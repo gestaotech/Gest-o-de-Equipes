@@ -54,7 +54,7 @@ function getMasterKey(): string {
 /**
  * Valida e retorna a chave HMAC para índice de busca.
  */
-function getHmacKey(): string {
+export function getHmacKey(): string {
   const key = process.env.ENCRYPTION_HMAC_KEY;
   if (!key) {
     throw new Error(
