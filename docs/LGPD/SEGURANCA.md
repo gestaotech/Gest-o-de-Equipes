@@ -61,8 +61,10 @@ Data: 06/11/2026
 
 ### 2.4. Proteção Contra Abuso
 
-- Rate limiting: 10 requisições por minuto por IP em rotas de autenticação
-- Middleware Next.js com rate limiting em login, cadastro, recuperar senha
+- Rate limiting no middleware Next.js em login, cadastro, recuperação e primeiro acesso (por IP e rota), e limite geral nas rotas protegidas
+- Implementação atual: contadores em memória no processo (falha aberta em caso de erro, para não bloquear a aplicação)
+- Limitação: em ambiente serverless com múltiplas instâncias, o limite não é compartilhado entre instâncias. A tabela `rate_limit_records` existe no banco, mas o middleware não a utiliza
+- Para limite distribuído, é necessário um armazenamento compartilhado (ex.: Redis/Upstash)
 - Sessões revogadas em troca de senha
 
 ## 3. CONTROLE DE ACESSO
@@ -122,7 +124,12 @@ O módulo `audit-sanitizer.ts` garante que:
 | AUTH_SECRET | Sim | Chave para assinatura JWT |
 | ENCRYPTION_KEY | Sim | Chave mestra para criptografia AES-256-GCM |
 | ENCRYPTION_HMAC_KEY | Sim | Chave para HMAC de busca por CPF |
-| ASAAS_API_KEY | Sim (build) | Chave da API Asaas (billing) |
 | DATABASE_URL | Sim | Conexão PostgreSQL |
+| ASAAS_API_KEY | Sim (build/cobrança) | Chave da API Asaas |
+| ASAAS_ENVIRONMENT | Sim em produção | `sandbox` (padrão) ou `production` |
+| ASAAS_WEBHOOK_TOKEN | Sim (webhook) | Token do header `asaas-access-token` para `/api/webhooks/asaas` |
+| CRON_SECRET | Sim (cron) | Segredo do endpoint `/api/cron/retention` |
+
+A lista completa, incluindo URLs públicas e e-mail, está em `docs/VARIAVEIS_AMBIENTE.md`.
 
 ---

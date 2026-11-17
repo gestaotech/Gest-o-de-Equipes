@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { getAppShellData } from "@/server/page-data";
 import { requireDataScope } from "@/server/scope";
 import { AppShell } from "@/components/app-shell/app-shell";
@@ -12,7 +13,6 @@ export default async function RequestsPage() {
   const scope = await requireDataScope();
 
   const canManage = permits(app.org.role, "audit.read") || permits(app.org.role, "settings.write");
-  const isOwn = !canManage;
 
   const where = canManage
     ? { organizationId: scope.orgId }
@@ -45,9 +45,9 @@ export default async function RequestsPage() {
             </p>
           </div>
           {canManage && (
-            <a href="/app/privacidade/requests/new" className="btn-primary">
+            <Link href="/app/privacidade/requests/new" className="btn-primary">
               Nova Solicitação
-            </a>
+            </Link>
           )}
         </div>
 
@@ -106,12 +106,12 @@ export default async function RequestsPage() {
                       )}
                     </td>
                     <td className="p-3">
-                      <a
+                      <Link
                         href={`/app/privacidade/requests/${req.id}`}
                         className="text-primary hover:underline text-xs"
                       >
                         Ver detalhes
-                      </a>
+                      </Link>
                     </td>
                   </tr>
                 ))

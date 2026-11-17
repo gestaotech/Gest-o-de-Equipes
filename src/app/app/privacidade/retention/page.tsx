@@ -3,12 +3,16 @@ import { getAppShellData } from "@/server/page-data";
 import { requireDataScope } from "@/server/scope";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { prisma } from "@/lib/prisma";
+import { permits } from "@/lib/rbac";
+import { RetentionPolicyForm } from "./policy-form";
 
 export const metadata: Metadata = { title: "Retenção e Descarte" };
 
 export default async function RetentionPage() {
   const app = await getAppShellData();
   const scope = await requireDataScope();
+
+  const canWrite = permits(app.org.role, "settings.write");
 
   const policies = await prisma.retentionPolicy.findMany({
     where: { organizationId: scope.orgId },
@@ -18,7 +22,11 @@ export default async function RetentionPage() {
   return (
     <AppShell org={app.org} orgs={app.orgs} user={app.user} unread={app.unread}>
       <div className="mx-auto w-full max-w-7xl p-4 lg:p-6">
-        <h1 className="text-2xl font-bold text-foreground mb-6">Retenção e Descarte</h1>
+        <h1 className="text-2xl font-bold text-foreground mb-2">Retenção e Descarte</h1>
+        <p className="text-sm text-muted-foreground mb-6">
+          Políticas ativas são executadas diariamente. Hoje são suportados: registros de atividade e
+          notificações já lidas, com ação de exclusão.
+        </p>
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left border-collapse">
@@ -64,6 +72,8 @@ export default async function RetentionPage() {
             </tbody>
           </table>
         </div>
+
+        {canWrite && <RetentionPolicyForm />}
       </div>
     </AppShell>
   );

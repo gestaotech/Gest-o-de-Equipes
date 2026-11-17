@@ -13,6 +13,8 @@ import {
   Trash2,
   Upload,
   ShieldAlert,
+  ShieldCheck,
+  KeyRound,
 } from "lucide-react";
 import {
   updateProfile,
@@ -24,6 +26,11 @@ import {
   revokeOtherSessions,
   deleteAccount,
 } from "@/server/profile-actions";
+import {
+  setupTwoFactor,
+  enableTwoFactor,
+  disableTwoFactor,
+} from "@/server/two-factor-actions";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -115,6 +122,7 @@ export function ProfileClient({
   orgName,
   isOwner,
   blocked,
+  twoFactorEnabled,
 }: {
   initialTab: TabId;
   user: {
@@ -130,6 +138,7 @@ export function ProfileClient({
   orgName: string;
   isOwner: boolean;
   blocked?: boolean;
+  twoFactorEnabled: boolean;
 }) {
   const router = useRouter();
   const [tab, setTab] = React.useState<TabId>(initialTab);
@@ -182,7 +191,7 @@ export function ProfileClient({
       ) : tab === "perfil" ? (
         <PerfilTab user={user} professional={professional} orgName={orgName} />
       ) : tab === "seguranca" ? (
-        <SegurancaTab isOwner={isOwner} />
+        <SegurancaTab isOwner={isOwner} twoFactorEnabled={twoFactorEnabled} />
       ) : tab === "preferencias" ? (
         <PreferenciasTab preferences={preferences} />
       ) : (
@@ -448,7 +457,13 @@ function ReadRow({
 // ABA: SEGURANÇA
 // ------------------------------------------------------------
 
-function SegurancaTab({ isOwner }: { isOwner: boolean }) {
+function SegurancaTab({
+  isOwner,
+  twoFactorEnabled,
+}: {
+  isOwner: boolean;
+  twoFactorEnabled: boolean;
+}) {
   const router = useRouter();
   const [pw, setPw] = React.useState({
     current: "",
@@ -459,6 +474,16 @@ function SegurancaTab({ isOwner }: { isOwner: boolean }) {
   const [delOpen, setDelOpen] = React.useState(false);
   const [delPassword, setDelPassword] = React.useState("");
   const [delBusy, setDelBusy] = React.useState(false);
+
+  const [tfaEnabled, setTfaEnabled] = React.useState(twoFactorEnabled);
+  const [tfaBusy, setTfaBusy] = React.useState(false);
+  const [tfaSetup, setTfaSetup] = React.useState<{
+    secret: string;
+    backupCodes: string[];
+    otpauthUrl: string;
+  } | null>(null);
+  const [tfaCode, setTfaCode] = React.useState("");
+  const [tfaDisablePw, setTfaDisablePw] = React.useState("");
 
   async function savePassword() {
     if (pw.next.length < 6) {
@@ -502,6 +527,59 @@ function SegurancaTab({ isOwner }: { isOwner: boolean }) {
       router.refresh();
     } else {
       toast(res.error?.message ?? "Erro.", "error");
+    }
+  }
+
+  async function startTwoFactor() {
+    setTfaBusy(true);
+    const res = (await setupTwoFactor()) as ActionResult<{
+      secret: string;
+      backupCodes: string[];
+      otpauthUrl: string;
+    }>;
+    setTfaBusy(false);
+    if (res.success && res.data) {
+      setTfaSetup(res.data);
+      setTfaCode("");
+    } else {
+      toast(res.error?.message ?? "Não foi possível iniciar o 2FA.", "error");
+    }
+  }
+
+  async function confirmTwoFactor() {
+    if (!/^\d{6}$/.test(tfaCode.trim())) {
+      toast("Informe o código de 6 dígitos do aplicativo.", "error");
+      return;
+    }
+    setTfaBusy(true);
+    const res = (await enableTwoFactor({ token: tfaCode.trim() })) as ActionResult;
+    setTfaBusy(false);
+    if (res.success) {
+      setTfaEnabled(true);
+      setTfaSetup(null);
+      setTfaCode("");
+      toast("Autenticação em duas etapas ativada.");
+      router.refresh();
+    } else {
+      toast(res.error?.message ?? "Código inválido.", "error");
+    }
+  }
+
+  async function turnOffTwoFactor() {
+    if (!tfaDisablePw) {
+      toast("Informe sua senha para desativar.", "error");
+      return;
+    }
+    setTfaBusy(true);
+    const res = (await disableTwoFactor({ password: tfaDisablePw })) as ActionResult;
+    setTfaBusy(false);
+    if (res.success) {
+      setTfaEnabled(false);
+      setTfaDisablePw("");
+      toast("Autenticação em duas etapas desativada.");
+      router.refresh();
+    } else {
+      toast(res.error?.message ?? "Erro ao desativar o 2FA.", "error");
     }
   }
 
@@ -630,6 +708,108 @@ function SegurancaTab({ isOwner }: { isOwner: boolean }) {
                 </Button>
               </div>
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="lg:col-span-2">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            {tfaEnabled ? (
+              <ShieldCheck className="h-4 w-4 text-green-600" />
+            ) : (
+              <KeyRound className="h-4 w-4 text-blue-600" />
+            )}
+            <CardTitle>Autenticação em duas etapas (2FA)</CardTitle>
+          </div>
+          <CardDescription>
+            Use um aplicativo autenticador (Google Authenticator, Authy, etc.) para gerar
+            códigos de verificação no login.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {tfaEnabled ? (
+            <>
+              <p className="text-sm text-green-700">A autenticação em duas etapas está ativa.</p>
+              <div className="max-w-sm space-y-3">
+                <div>
+                  <Label htmlFor="tfa-disable-pw">Senha atual</Label>
+                  <Input
+                    id="tfa-disable-pw"
+                    type="password"
+                    autoComplete="current-password"
+                    value={tfaDisablePw}
+                    onChange={(e) => setTfaDisablePw(e.target.value)}
+                  />
+                </div>
+                <Button type="button" variant="outline" loading={tfaBusy} onClick={turnOffTwoFactor}>
+                  Desativar 2FA
+                </Button>
+              </div>
+            </>
+          ) : tfaSetup ? (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Adicione esta conta no seu aplicativo autenticador usando o segredo abaixo (ou a URI
+                otpauth). Depois, guarde os códigos de backup em local seguro: eles não serão
+                mostrados novamente.
+              </p>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <Label>Segredo</Label>
+                  <code className="mt-1 block break-all rounded bg-muted p-2 text-sm">
+                    {tfaSetup.secret}
+                  </code>
+                </div>
+                <div>
+                  <Label>URI (otpauth)</Label>
+                  <code className="mt-1 block break-all rounded bg-muted p-2 text-xs">
+                    {tfaSetup.otpauthUrl}
+                  </code>
+                </div>
+              </div>
+              <div>
+                <Label>Códigos de backup (uso único)</Label>
+                <div className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {tfaSetup.backupCodes.map((code) => (
+                    <code key={code} className="rounded bg-muted px-2 py-1 text-center text-sm">
+                      {code}
+                    </code>
+                  ))}
+                </div>
+              </div>
+              <div className="max-w-xs space-y-3">
+                <div>
+                  <Label htmlFor="tfa-enable-code">Código de 6 dígitos</Label>
+                  <Input
+                    id="tfa-enable-code"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    placeholder="000000"
+                    value={tfaCode}
+                    onChange={(e) => setTfaCode(e.target.value)}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button type="button" loading={tfaBusy} onClick={confirmTwoFactor}>
+                    Confirmar e ativar
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={() => setTfaSetup(null)}>
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                A autenticação em duas etapas não está ativa. Ao ativar, o login pedirá um código
+                do aplicativo além da senha.
+              </p>
+              <Button type="button" loading={tfaBusy} onClick={startTwoFactor}>
+                <KeyRound className="h-4 w-4" /> Ativar 2FA
+              </Button>
+            </>
           )}
         </CardContent>
       </Card>

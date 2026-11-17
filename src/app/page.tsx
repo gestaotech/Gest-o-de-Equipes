@@ -158,10 +158,10 @@ const USE_CASES = [
 ];
 
 const INTEGRATIONS = [
-  { name: "Google Calendar", desc: "Sincronize eventos e reuniões" },
-  { name: "WhatsApp", desc: "Notificações e lembretes" },
-  { name: "Google Drive", desc: "Anexos e documentos" },
-  { name: "Slack", desc: "Comunicação de equipe" },
+  { name: "Google Calendar", desc: "Eventos e reuniões (em breve)" },
+  { name: "WhatsApp", desc: "Notificações e lembretes (em breve)" },
+  { name: "Google Drive", desc: "Anexos e documentos (em breve)" },
+  { name: "Slack", desc: "Comunicação de equipe (em breve)" },
 ];
 
 export default function LandingPage() {
@@ -339,7 +339,11 @@ function Integrations() {
     <section className="page-container py-24 sm:py-32 border-y bg-muted/40">
       <div className="mx-auto max-w-2xl text-center">
         <p className="text-sm font-semibold text-blue-600">Integrações</p>
-        <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Conecte suas ferramentas favoritas</h2>
+        <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Integrações em evolução</h2>
+        <p className="mt-3 text-muted-foreground">
+          Conexões com ferramentas do seu dia a dia estão no nosso roadmap. Fale com a equipe para
+          consultar disponibilidade no seu plano.
+        </p>
       </div>
       <div className="mt-16 grid gap-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
         {INTEGRATIONS.map((i) => (

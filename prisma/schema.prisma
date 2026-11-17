@@ -249,7 +249,6 @@ model OrganizationMember {
   role           RoleName     @default(MEMBER)
   status         MemberStatus @default(ATIVO)
   jobTitle       String?
-  cpf            String? // Campo legado em texto puro — será migrado para cpfEncrypted
   cpfEncrypted   String? // CPF criptografado (AES-256-GCM)
   cpfHmacIndex   String? // Índice HMAC para busca segura por CPF
   phone          String?
@@ -1135,4 +1134,13 @@ model RateLimitRecord {
   @@index([key])
   @@index([resetAt])
   @@map("rate_limit_records")
+}
+
+model WebhookEvent {
+  id        String   @id
+  provider  String
+  eventType String
+  createdAt DateTime @default(now())
+
+  @@map("webhook_events")
 }

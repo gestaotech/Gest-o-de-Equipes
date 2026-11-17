@@ -1,43 +1,41 @@
-import { api } from "./client";
-import crypto from "crypto";
+import { timingSafeEqual } from "crypto";
+import type { SubscriptionStatus } from "@prisma/client";
 
-export interface AsaasWebhookEvent {
-  id: string;
-  object: string;
-  webhookStatus: string;
-  resource: string;
-  resourceId: string;
-  event: string;
-  eventDate: string;
-  payload: string;
-  signature?: string;
-}
-
-export interface AsaasWebhookVerification {
-  valid: boolean;
-  error?: string;
-}
-
-export async function verifyWebhookSignature(
-  payload: string,
-  signature: string,
-  webhookToken: string
-): Promise<AsaasWebhookVerification> {
-  const hmac = crypto.createHmac("sha256", webhookToken);
-  hmac.update(payload);
-  const computedSignature = hmac.digest("hex");
-
-  const isValid = computedSignature === signature;
-
-  return {
-    valid: isValid,
-    error: isValid ? undefined : "Invalid webhook signature",
+export interface AsaasWebhookBody {
+  id?: unknown;
+  event?: unknown;
+  payment?: {
+    id?: unknown;
+    subscription?: unknown;
   };
+  subscription?: unknown;
 }
 
-export async function parseWebhookEvent(
-  payload: string
-): Promise<AsaasWebhookEvent> {
-  const result = JSON.parse(payload);
-  return result;
+export const ASAAS_EVENT_STATUS: Record<string, SubscriptionStatus> = {
+  PAYMENT_CONFIRMED: "ACTIVE",
+  PAYMENT_RECEIVED: "ACTIVE",
+  PAYMENT_OVERDUE: "PAST_DUE",
+  PAYMENT_REFUNDED: "REFUNDED",
+};
+
+export function getAsaasSubscriptionId(body: AsaasWebhookBody): string | null {
+  const fromPayment = body.payment?.subscription;
+  if (typeof fromPayment === "string" && fromPayment) return fromPayment;
+
+  const sub = body.subscription;
+  if (typeof sub === "string" && sub) return sub;
+  if (sub && typeof sub === "object" && "id" in sub) {
+    const id = (sub as { id?: unknown }).id;
+    if (typeof id === "string" && id) return id;
+  }
+
+  return null;
+}
+
+export function isValidAsaasWebhookToken(received: string, expected: string): boolean {
+  if (!received || !expected) return false;
+  const a = Buffer.from(received);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 }

@@ -8,6 +8,7 @@ import { guardPerm } from "@/server/guards";
 import { logActivity } from "@/server/activity";
 import z from "zod";
 import { DataCategory, DataSubjectCategory, LegalBasis, SharingType, IncidentSeverity } from "@prisma/client";
+import { RETENTION_ENTITY_TYPES, RETENTION_ACTIONS, MIN_RETENTION_DAYS } from "@/lib/retention";
 
 // ============================================================================
 // PROCESSING RECORDS (ROPA - Registro de Operações de Tratamento)
@@ -347,11 +348,11 @@ export async function listConsents() {
 // ============================================================================
 
 const retentionPolicySchema = z.object({
-  entityType: z.string().min(1),
+  entityType: z.enum(RETENTION_ENTITY_TYPES),
   entityField: z.string().optional(),
   condition: z.string().min(1),
-  action: z.string().min(1),
-  retentionDays: z.number().min(1),
+  action: z.enum(RETENTION_ACTIONS),
+  retentionDays: z.number().int().min(MIN_RETENTION_DAYS, `Prazo mínimo de ${MIN_RETENTION_DAYS} dias.`),
   legalBasis: z.string().optional(),
   isActive: z.boolean().default(true),
 });

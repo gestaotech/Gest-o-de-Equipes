@@ -288,7 +288,6 @@ export async function addCollaborator(input: unknown) {
           userId,
           role,
           jobTitle: data.jobTitle || role || null,
-          cpf: data.cpf || null, // Mantido temporariamente para migração
           cpfEncrypted,
           cpfHmacIndex,
           phone: data.phone || null,

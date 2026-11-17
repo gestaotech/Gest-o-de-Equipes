@@ -75,13 +75,18 @@ Aplicável quando:
 
 ## 4.4. Rotina de Limpeza
 
-A rotina de limpeza deve ser executada periodicamente (ex: mensalmente) e:
+O projeto inclui uma rotina automática executada pelo Vercel Cron (`GET /api/cron/retention`, diário às 03:00 UTC, protegida por `CRON_SECRET`).
 
-1. Identificar registros elegíveis para descarte com base nas `RetentionPolicy`
-2. Verificar se há impedimentos legais
-3. Executar a ação configurada (DELETE, ANONYMIZE, RETAIN_LEGAL)
-4. Registrar a operação no log de auditoria
-5. Gerar relatório de descarte para a organização
+**Escopo implementado hoje:** apenas políticas ativas com ação `DELETE`, prazo mínimo de 30 dias e tipo de entidade suportado:
+
+| `entityType` | Condição aplicada pelo job | O que é removido |
+|---|---|---|
+| `activity_logs` | Registros mais antigos que o prazo | `ActivityLog` da organização com `createdAt` anterior ao corte |
+| `notifications` | Notificações lidas mais antigas que o prazo | `Notification` da organização com `readAt` anterior ao corte |
+
+A cada execução, o job registra `governance.retention.executed` no log de auditoria da organização com o tipo, o prazo e a quantidade removida.
+
+**Não implementado automaticamente:** ações `ANONYMIZE` e `RETAIN_LEGAL`, outros tipos de entidade e condições em texto livre. Esses casos exigem revisão e execução controlada.
 
 ## 5. BACKUPS
 

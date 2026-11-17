@@ -3,6 +3,7 @@ import { getAppShellData } from "@/server/page-data";
 import { requireDataScope } from "@/server/scope";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { prisma } from "@/lib/prisma";
+import { ConsentActions } from "./consent-actions";
 
 export const metadata: Metadata = { title: "Meu Consentimento" };
 
@@ -23,6 +24,8 @@ export default async function ConsentPage() {
         },
       })
     : null;
+
+  const accepted = Boolean(consent && !consent.revokedAt);
 
   return (
     <AppShell org={app.org} orgs={app.orgs} user={app.user} unread={app.unread}>
@@ -52,7 +55,7 @@ export default async function ConsentPage() {
             <div className="p-6 rounded-lg border border-border">
               <h3 className="font-semibold text-foreground mb-4">Seu Consentimento</h3>
 
-              {consent ? (
+              {accepted && consent ? (
                 <>
                   <div className="mb-4">
                     <span className="px-2 py-1 rounded bg-green-100 text-green-700 text-xs">
@@ -68,14 +71,16 @@ export default async function ConsentPage() {
                     </span>
                     .
                   </p>
-                  <button className="btn-primary mt-4">Revogar Consentimento</button>
+                  <ConsentActions policyId={activePolicy.id} accepted />
                 </>
               ) : (
                 <>
                   <p className="text-sm text-muted-foreground mb-4">
-                    Você ainda não aceitou a política de privacidade vigente.
+                    {consent?.revokedAt
+                      ? "Você revogou seu consentimento. Aceite novamente para continuar usando os recursos que dependem dele."
+                      : "Você ainda não aceitou a política de privacidade vigente."}
                   </p>
-                  <button className="btn-primary">Aceitar Política de Privacidade</button>
+                  <ConsentActions policyId={activePolicy.id} accepted={false} />
                 </>
               )}
             </div>

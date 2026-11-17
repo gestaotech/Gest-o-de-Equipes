@@ -353,7 +353,8 @@ export async function anonymizeUserData(userId: string) {
         where: { id: membership.id },
         data: {
           jobTitle: null,
-          cpf: null,
+          cpfEncrypted: null,
+          cpfHmacIndex: null,
           phone: null,
           departmentId: null,
           managerId: null,
@@ -362,19 +363,15 @@ export async function anonymizeUserData(userId: string) {
       // Anonimizar comentários deste usuário nesta organização
       // Mantém o texto do comentário, remove o vínculo direto com o usuário
       prisma.taskComment.updateMany({
-        where: { userId },
+        where: { userId, task: { organizationId: scope.orgId } },
         data: { userId: null },
       }),
-      // Anonimizar notificações deste usuário nesta organização
-      prisma.notification.updateMany({
+      // Notificações são mensagens pessoais: removidas desta organização
+      prisma.notification.deleteMany({
         where: { userId, organizationId: scope.orgId },
-        data: { userId: `anon_${timestamp}` },
       }),
-      // Anonimizar sessões deste usuário nesta organização
-      prisma.userSession.updateMany({
-        where: { userId },
-        data: { revokedAt: new Date() },
-      }),
+      // Sessões são globais (sem vínculo com a organização); não são revogadas aqui
+      // para não afetar o acesso do usuário a outras organizações.
     ]);
 
     await logActivity({
@@ -424,27 +421,21 @@ export async function deleteUserData(userId: string) {
     }
 
     await prisma.$transaction([
-      // Excluir sessões do usuário nesta organização
-      prisma.userSession.deleteMany({ where: { userId } }),
-      // Excluir preferências do usuário (apenas se não pertencer a outras orgs)
-      prisma.userPreference.deleteMany({ where: { userId } }),
-      // Excluir 2FA
-      prisma.userTwoFactor.deleteMany({ where: { userId } }),
-      // Excluir tokens de conta
-      prisma.accountToken.deleteMany({ where: { userId } }),
+      // Dados globais do usuário (2FA, tokens, sessões, preferências) NÃO são apagados aqui:
+      // o usuário pode continuar em outras organizações. Só dados desta organização são tratados.
       // Excluir consents desta organização
       prisma.consent.deleteMany({ where: { userId, organizationId: scope.orgId } }),
       // Excluir notificações desta organização
       prisma.notification.deleteMany({ where: { userId, organizationId: scope.orgId } }),
-      // Remover vínculo de colaborador em comentários (manter texto)
+      // Remover vínculo de colaborador em comentários desta organização (manter texto)
       prisma.taskComment.updateMany({
-        where: { userId },
+        where: { userId, task: { organizationId: scope.orgId } },
         data: { userId: null },
       }),
       // Excluir registros de atividade do usuário nesta organização
       prisma.activityLog.deleteMany({ where: { userId, organizationId: scope.orgId } }),
-      // Excluir participações em eventos
-      prisma.eventParticipant.deleteMany({ where: { userId } }),
+      // Excluir participações em eventos desta organização
+      prisma.eventParticipant.deleteMany({ where: { userId, event: { organizationId: scope.orgId } } }),
       // Excluir membership desta organização (não excluir o User global)
       prisma.organizationMember.delete({ where: { id: membership.id } }),
     ]);

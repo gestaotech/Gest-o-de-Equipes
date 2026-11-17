@@ -61,7 +61,7 @@ export default async function ProfilePage({
     );
   }
 
-  const [preferences, sessions, orgs, unread, membership] = await Promise.all([
+  const [preferences, sessions, orgs, unread, membership, twoFactor] = await Promise.all([
     prisma.userPreference.findUnique({ where: { userId: user.id } }),
     prisma.userSession.findMany({
       where: { userId: user.id },
@@ -82,6 +82,10 @@ export default async function ProfilePage({
         manager: { include: { user: { select: { name: true } } } },
         teamMembers: { include: { team: { select: { name: true } } } },
       },
+    }),
+    prisma.userTwoFactor.findUnique({
+      where: { userId: user.id },
+      select: { enabled: true },
     }),
   ]);
 
@@ -152,6 +156,7 @@ export default async function ProfilePage({
         orgName={org.name}
         isOwner={membership?.role === "OWNER"}
         blocked={membership?.status === "INATIVO"}
+        twoFactorEnabled={Boolean(twoFactor?.enabled)}
       />
     </AppShell>
   );

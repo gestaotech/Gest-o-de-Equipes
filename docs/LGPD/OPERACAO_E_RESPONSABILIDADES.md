@@ -100,4 +100,9 @@ Cada organização deve:
 - Registrar a versão apresentada a cada usuário
 - Registrar o aceite de consentimento quando aplicável (modelo `Consent`)
 
+## 7. VERIFICAÇÃO DE IDENTIDADE E PENDÊNCIAS
+
+- Antes de atender solicitações sensíveis (acesso/exportação/correção/exclusão), verificar a identidade do solicitante e registrar a evidência.
+- Pendências técnicas, operacionais e jurídicas consolidadas: `docs/LGPD/PENDENCIAS_E_OPERACAO.md`.
+
 ---
