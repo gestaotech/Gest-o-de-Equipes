@@ -51,6 +51,11 @@ export async function register(input: unknown) {
   return handleAction(async () => {
     const data = signUpSchema.parse(input);
     const email = normalizeEmail(data.email);
+
+    // Prepare global roles, permissions and plans before creating the account.
+    // If catalog initialization fails, do not leave an unusable user behind.
+    await ensureCatalogs();
+
     const exists = await prisma.user.findUnique({ where: { email } });
     if (exists) {
       throw new AppError("EMAIL_IN_USE", "Este e-mail já está cadastrado. Faça login.", 409);
@@ -62,7 +67,6 @@ export async function register(input: unknown) {
         passwordHash: await hashPassword(data.password),
       },
     });
-    await ensureCatalogs();
     await createSession({ sub: user.id, email: user.email, name: user.name }, await sessionMeta());
     return { id: user.id, name: user.name };
   });
