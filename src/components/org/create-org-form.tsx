@@ -11,22 +11,24 @@ import { slugify } from "@/lib/utils";
 import { toast } from "@/components/ui/toast";
 import type { ActionResult } from "@/lib/types";
 
-export function CreateOrgForm() {
+export function CreateOrgForm({ selectedPlan }: { selectedPlan?: string }) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(
     async (_prev: ActionResult, formData: FormData) => {
       const name = String(formData.get("name") ?? "");
       const rawSlug = String(formData.get("slug") ?? "").trim();
+      const planTier = String(formData.get("planTier") ?? "");
       const res = (await createOrganization({
         name,
         segment: String(formData.get("segment") ?? "") || undefined,
         size: String(formData.get("size") ?? "") || undefined,
+        ...(planTier ? { planTier } : {}),
         ...(rawSlug ? { slug: slugify(rawSlug) } : {}),
       })) as ActionResult;
       if (res.success) {
         toast("Empresa criada!");
         setTimeout(() => {
-          router.push("/onboarding");
+          router.push(selectedPlan ? `/contratar?plan=${selectedPlan}` : "/onboarding");
           router.refresh();
         }, 200);
       } else {
@@ -42,11 +44,12 @@ export function CreateOrgForm() {
       <CardHeader>
         <CardTitle>Criar sua empresa</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Último passo para começar. Configure sua organização no TeamFlow.
+          {selectedPlan ? "Informe os dados da empresa para continuar com a contratação." : "Último passo para começar. Configure sua organização no TeamFlow."}
         </p>
       </CardHeader>
       <CardContent>
         <form action={formAction} className="space-y-4">
+          {selectedPlan && <input type="hidden" name="planTier" value={selectedPlan} />}
           <div>
             <Label htmlFor="name">Nome da empresa</Label>
             <Input id="name" name="name" required autoComplete="organization" placeholder="Ex.: Tech Solutions Ltda" />
@@ -81,18 +84,10 @@ export function CreateOrgForm() {
               <span className="text-sm text-muted-foreground">teamflow.app/</span>
               <Input id="slug" name="slug" placeholder="sua-empresa" className="flex-1 font-mono text-sm" />
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Se vazio, será gerado automaticamente a partir do nome.
-            </p>
+            <p className="mt-1 text-xs text-muted-foreground">Se vazio, será gerado automaticamente a partir do nome.</p>
           </div>
-          {state.error && (
-            <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-              {state.error.message}
-            </div>
-          )}
-          <Button type="submit" className="w-full" loading={pending}>
-            Criar empresa
-          </Button>
+          {state.error && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{state.error.message}</div>}
+          <Button type="submit" className="w-full" loading={pending}>Criar empresa</Button>
         </form>
       </CardContent>
     </Card>
