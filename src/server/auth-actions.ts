@@ -28,6 +28,7 @@ import { issueAccountToken, consumeAccountToken } from "@/server/account-token";
 import { sendPasswordResetEmail } from "@/lib/email";
 import { decrypt } from "@/lib/encryption";
 import { validateTOTP, validateBackupCode } from "@/server/two-factor-actions";
+import { consumeAttempt, resetAttempts } from "@/lib/db-rate-limit";
 
 const normalizeEmail = (e: string) => e.trim().toLowerCase();
 
@@ -158,6 +159,9 @@ export async function completeTwoFactorLogin(input: { tempToken: string; token: 
       throw new AppError("INVALID_TOKEN", "Token temporário inválido ou expirado.", 400);
     }
 
+    // Limite de tentativas de código por usuário (persistido, entre instâncias)
+    await consumeAttempt(`2fa:${payload.sub}`, 5, 15 * 60 * 1000);
+
     // Verificar se o usuário tem 2FA ativado
     const tfa = await prisma.userTwoFactor.findUnique({
       where: { userId: payload.sub },
@@ -196,6 +200,8 @@ export async function completeTwoFactorLogin(input: { tempToken: string; token: 
       orderBy: { joinedAt: "asc" },
       select: { organizationId: true },
     }));
+
+    await resetAttempts(`2fa:${payload.sub}`);
 
     // Criar sessão completa após validação do 2FA
     await createSession(

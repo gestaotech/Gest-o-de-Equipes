@@ -5,6 +5,7 @@ import { handleAction, AppError, ok } from "@/lib/errors";
 import { requireSessionApi } from "@/lib/auth";
 import { createHmac, randomBytes } from "crypto";
 import { encrypt, decrypt, getHmacKey } from "@/lib/encryption";
+import { consumeAttempt, resetAttempts } from "@/lib/db-rate-limit";
 
 // Tabela Base32 (RFC 4648)
 const BASE32_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -270,6 +271,7 @@ export async function getBackupCodes() {
 export async function verifyTwoFactorToken(input: { token: string }) {
   return handleAction(async () => {
     const session = await requireSessionApi();
+    await consumeAttempt(`2fa:${session.sub}`, 5, 15 * 60 * 1000);
 
     const tfa = await prisma.userTwoFactor.findUnique({
       where: { userId: session.sub },
@@ -283,6 +285,7 @@ export async function verifyTwoFactorToken(input: { token: string }) {
 
     // Tenta como código TOTP
     if (await validateTOTP(secret, input.token, 1)) {
+      await resetAttempts(`2fa:${session.sub}`);
       return ok({ valid: true, type: "totp" });
     }
 

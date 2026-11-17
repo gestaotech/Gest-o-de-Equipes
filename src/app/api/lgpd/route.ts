@@ -98,13 +98,13 @@ export async function PATCH(request: NextRequest) {
       status,
       rejectionReason,
       comment,
-    } as any);
+    });
 
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error) {
     return NextResponse.json(
-      { error: error.message || "Erro interno." },
-      { status: error.statusCode ?? 500 }
+      { error: (error as Error).message || "Erro interno." },
+      { status: (error as { statusCode?: number }).statusCode ?? 500 }
     );
   }
 }
@@ -122,10 +122,10 @@ export async function DELETE(request: NextRequest) {
 
     const result = await deleteUserData(userId);
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error) {
     return NextResponse.json(
-      { error: error.message || "Erro interno." },
-      { status: error.statusCode ?? 500 }
+      { error: (error as Error).message || "Erro interno." },
+      { status: (error as { statusCode?: number }).statusCode ?? 500 }
     );
   }
 }

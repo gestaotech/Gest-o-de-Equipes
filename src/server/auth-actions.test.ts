@@ -112,7 +112,7 @@ describe("resetPassword", () => {
     const result = await resetPassword({ token: "token-invalido", password: "NovaSenha123", confirm: "NovaSenha123" });
 
     expect(result.success).toBe(false);
-    expect((result as any).error?.message).toBe("Link inválido ou expirado.");
+    expect((result as { error?: { message?: string } }).error?.message).toBe("Link inválido ou expirado.");
   });
 
   it("rejeita token expirado", async () => {
@@ -128,7 +128,7 @@ describe("resetPassword", () => {
     const result = await resetPassword({ token: "token-expirado", password: "NovaSenha123", confirm: "NovaSenha123" });
 
     expect(result.success).toBe(false);
-    expect((result as any).error?.message).toBe("Link inválido ou expirado.");
+    expect((result as { error?: { message?: string } }).error?.message).toBe("Link inválido ou expirado.");
   });
 
   it("rejeita token já utilizado", async () => {
@@ -143,7 +143,7 @@ describe("resetPassword", () => {
     const result = await resetPassword({ token: "token-usado", password: "NovaSenha123", confirm: "NovaSenha123" });
 
     expect(result.success).toBe(false);
-    expect((result as any).error?.message).toBe("Link inválido ou expirado.");
+    expect((result as { error?: { message?: string } }).error?.message).toBe("Link inválido ou expirado.");
   });
 
   it("rejeita token de tipo incorreto", async () => {
@@ -158,7 +158,7 @@ describe("resetPassword", () => {
     const result = await resetPassword({ token: "token-wrong-type", password: "NovaSenha123", confirm: "NovaSenha123" });
 
     expect(result.success).toBe(false);
-    expect((result as any).error?.message).toBe("Link inválido ou expirado.");
+    expect((result as { error?: { message?: string } }).error?.message).toBe("Link inválido ou expirado.");
   });
 
   it("executa transação atômica com sucesso", async () => {
@@ -213,7 +213,7 @@ describe("completeFirstAccess", () => {
     const result = await completeFirstAccess({ token: "token-invalido", password: "Senha123", confirm: "Senha123" });
 
     expect(result.success).toBe(false);
-    expect((result as any).error?.message).toBe("Link inválido ou expirado.");
+    expect((result as { error?: { message?: string } }).error?.message).toBe("Link inválido ou expirado.");
   });
 
   it("rejeita token já utilizado", async () => {
@@ -228,7 +228,7 @@ describe("completeFirstAccess", () => {
     const result = await completeFirstAccess({ token: "token-usado", password: "Senha123", confirm: "Senha123" });
 
     expect(result.success).toBe(false);
-    expect((result as any).error?.message).toBe("Link inválido ou expirado.");
+    expect((result as { error?: { message?: string } }).error?.message).toBe("Link inválido ou expirado.");
   });
 
   it("executa transação atômica com sucesso", async () => {
@@ -264,7 +264,7 @@ describe("completeFirstAccess", () => {
     const result = await completeFirstAccess({ token: "token-valido", password: "Senha123", confirm: "Senha123" });
 
     expect(result.success).toBe(false);
-    expect((result as any).error?.message).toBe("Usuário não encontrado.");
+    expect((result as { error?: { message?: string } }).error?.message).toBe("Usuário não encontrado.");
     // Nota: o mock do Prisma não simula rollback de transação.
   });
 

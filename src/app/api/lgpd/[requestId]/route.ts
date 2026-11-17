@@ -14,10 +14,10 @@ export async function GET(
 
     const result = await getLGPDRequest(requestId);
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error) {
     return NextResponse.json(
-      { error: error.message || "Erro interno." },
-      { status: error.statusCode ?? 500 }
+      { error: (error as Error).message || "Erro interno." },
+      { status: (error as { statusCode?: number }).statusCode ?? 500 }
     );
   }
 }
