@@ -102,6 +102,9 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
+  // Next.js 15.5 permite executar middleware no runtime Node.js.
+  // Isso evita que dependências Node/Prisma sejam carregadas no Edge Runtime.
+  runtime: "nodejs",
   matcher: [
     "/dashboard/:path*",
     "/app/:path*",
