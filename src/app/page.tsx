@@ -438,7 +438,7 @@ function Pricing() {
                 </li>
               ))}
             </ul>
-            <Link href="/cadastro" className={p.highlight ? "mt-6 inline-flex h-11 w-full items-center justify-center rounded-lg bg-blue-600 text-sm font-medium text-white transition-colors hover:bg-blue-700" : "mt-6 inline-flex h-11 w-full items-center justify-center rounded-lg border border-border text-sm font-medium transition-colors hover:bg-accent"}>
+            <Link href={p.id === "ECOSISTEMA" ? "https://wa.me/5561998361296" : "/cadastro?plan=" + p.id} className={p.highlight ? "mt-6 inline-flex h-11 w-full items-center justify-center rounded-lg bg-blue-600 text-sm font-medium text-white transition-colors hover:bg-blue-700" : "mt-6 inline-flex h-11 w-full items-center justify-center rounded-lg border border-border text-sm font-medium transition-colors hover:bg-accent"}>
               {p.cta}
             </Link>
           </div>
