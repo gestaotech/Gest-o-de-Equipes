@@ -22,7 +22,7 @@ Guia das variáveis usadas pelo TeamFlow. Valores reais devem ficar só no `.env
 
 | Variável | Descrição |
 |---|---|
-| `ASAAS_API_KEY` | Chave da API Asaas. Necessária para o build e para operações de cobrança. |
+| `ASAAS_API_KEY` | Chave da API Asaas. Hoje nenhum módulo a utiliza: a cobrança foi removida e precisa ser reimplementada antes de ser necessária. |
 | `ASAAS_ENVIRONMENT` | `sandbox` (padrão) ou `production`. Em produção, defina `production`; sem isso a integração usa a API de sandbox. |
 | `ASAAS_WEBHOOK_TOKEN` | Token de autenticação do webhook, enviado pela Asaas no header `asaas-access-token`. Obrigatório para `POST /api/webhooks/asaas` (sem ele o endpoint responde 503). Configure o mesmo valor no painel de webhooks da Asaas. |
 

@@ -26,10 +26,10 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({ notifications, unreadCount });
-  } catch (error: any) {
+  } catch (error) {
     return NextResponse.json(
-      { error: error.message || "Erro interno." },
-      { status: error.statusCode ?? 500 }
+      { error: (error as Error).message || "Erro interno." },
+      { status: (error as { statusCode?: number }).statusCode ?? 500 }
     );
   }
 }
@@ -78,10 +78,10 @@ export async function PATCH(request: NextRequest) {
       { error: "Parâmetros inválidos." },
       { status: 400 }
     );
-  } catch (error: any) {
+  } catch (error) {
     return NextResponse.json(
-      { error: error.message || "Erro interno." },
-      { status: error.statusCode ?? 500 }
+      { error: (error as Error).message || "Erro interno." },
+      { status: (error as { statusCode?: number }).statusCode ?? 500 }
     );
   }
 }
@@ -116,10 +116,10 @@ export async function DELETE(request: NextRequest) {
     });
 
     return NextResponse.json({ ok: true });
-  } catch (error: any) {
+  } catch (error) {
     return NextResponse.json(
-      { error: error.message || "Erro interno." },
-      { status: error.statusCode ?? 500 }
+      { error: (error as Error).message || "Erro interno." },
+      { status: (error as { statusCode?: number }).statusCode ?? 500 }
     );
   }
 }

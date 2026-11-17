@@ -125,7 +125,7 @@ O módulo `audit-sanitizer.ts` garante que:
 | ENCRYPTION_KEY | Sim | Chave mestra para criptografia AES-256-GCM |
 | ENCRYPTION_HMAC_KEY | Sim | Chave para HMAC de busca por CPF |
 | DATABASE_URL | Sim | Conexão PostgreSQL |
-| ASAAS_API_KEY | Sim (build/cobrança) | Chave da API Asaas |
+| ASAAS_API_KEY | Não (sem módulo de cobrança ativo) | Chave da API Asaas, usada apenas pelo cliente, ainda não ligado |
 | ASAAS_ENVIRONMENT | Sim em produção | `sandbox` (padrão) ou `production` |
 | ASAAS_WEBHOOK_TOKEN | Sim (webhook) | Token do header `asaas-access-token` para `/api/webhooks/asaas` |
 | CRON_SECRET | Sim (cron) | Segredo do endpoint `/api/cron/retention` |

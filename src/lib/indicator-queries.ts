@@ -793,7 +793,7 @@ export async function getProjectHealth(scope: IndicatorScope): Promise<ProjectHe
     select: { status: true, dueDate: true },
   });
   let onTrack = 0;
-  let atRisk = 0;
+  const atRisk = 0;
   let delayed = 0;
   const now = new Date();
   for (const p of projects) {
