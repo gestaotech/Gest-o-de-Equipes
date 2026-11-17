@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { handleAction, AppError, ok } from "@/lib/errors";
 import { requireSessionApi } from "@/lib/auth";
 import { createHmac, randomBytes } from "crypto";
-import { encrypt, decrypt } from "@/lib/encryption";
+import { encrypt, decrypt, getHmacKey } from "@/lib/encryption";
 
 // Tabela Base32 (RFC 4648)
 const BASE32_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -59,7 +59,7 @@ function generateBackupCodes(): string[] {
  * O código em texto puro nunca é persistido.
  */
 function hashBackupCode(code: string): string {
-  return createHmac("sha256", process.env.ENCRYPTION_HMAC_KEY || "fallback").update(code).digest("hex");
+  return createHmac("sha256", getHmacKey()).update(code).digest("hex");
 }
 
 /**
