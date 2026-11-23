@@ -26,7 +26,7 @@ export async function createCheckoutSession(input: { planId: string; cycle: "MON
     if (!plan) throw new AppError("NOT_FOUND", "Plano não encontrado.", 404);
 
     // Buscar ou criar customer Asaas para a organização
-    let orgCustomer = await prisma.organization.findUnique({
+    const orgCustomer = await prisma.organization.findUnique({
       where: { id: scope.orgId },
       select: { asaasCustomerId: true, name: true },
     });
