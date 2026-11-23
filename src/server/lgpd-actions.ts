@@ -5,6 +5,7 @@ import { handleAction, AppError, ok } from "@/lib/errors";
 import { requireSessionApi } from "@/lib/auth";
 import { requireDataScope } from "@/server/scope";
 import { logActivity } from "@/server/activity";
+import { verifyPassword } from "@/lib/auth";
 import z from "zod";
 
 const lgpdRequestSchema = z.object({
@@ -20,6 +21,35 @@ const lgpdUpdateStatusSchema = z.object({
   rejectionReason: z.string().optional(),
   comment: z.string().optional(),
 });
+
+/**
+ * Verifica a identidade do solicitante antes de ações sensíveis LGPD.
+ * Exige senha atual ou código 2FA válido.
+ */
+async function verifyIdentity(session: { sub: string }, input: { password?: string; totp?: string }): Promise<void> {
+  const user = await prisma.user.findUnique({ where: { id: session.sub }, select: { passwordHash: true } });
+  if (!user) throw new AppError("NOT_FOUND", "Usuário não encontrado.", 404);
+
+  if (input.password) {
+    const valid = await verifyPassword(input.password, user.passwordHash);
+    if (!valid) throw new AppError("INVALID_CREDENTIALS", "Senha incorreta.", 401);
+    return;
+  }
+
+  if (input.totp) {
+    const { validateTOTP } = await import("@/server/two-factor-actions");
+    const tfa = await prisma.userTwoFactor.findUnique({ where: { userId: session.sub } });
+    if (!tfa?.enabled || !tfa.secretEncrypted) throw new AppError("NOT_FOUND", "2FA não configurado.", 404);
+    const { decrypt } = await import("@/lib/encryption");
+    const secret = await decrypt(tfa.secretEncrypted);
+    if (!(await validateTOTP(secret, input.totp, 1))) {
+      throw new AppError("INVALID_TOKEN", "Código 2FA inválido.", 401);
+    }
+    return;
+  }
+
+  throw new AppError("VALIDATION_ERROR", "Informe a senha atual ou código 2FA para confirmar a identidade.", 400);
+}
 
 /**
  * LGPD — Direitos dos Titulares (Art. 18 LGPD)
@@ -238,7 +268,7 @@ export async function getLGPDRequest(requestId: string) {
  * Exporta os dados pessoais de um usuário (portabilidade - Art. 20 LGPD).
  * Retorna todos os dados do usuário na organização em formato JSON.
  */
-export async function exportUserData(userId: string) {
+export async function exportUserData(userId: string, verification?: { password?: string; totp?: string }) {
   return handleAction(async () => {
     const session = await requireSessionApi();
     const scope = await requireDataScope();
@@ -246,6 +276,11 @@ export async function exportUserData(userId: string) {
     // Apenas o próprio usuário ou admin pode exportar
     if (userId !== session.sub && !["OWNER", "ADMIN", "MANAGER"].includes(scope.role)) {
       throw new AppError("FORBIDDEN", "Você só pode exportar seus próprios dados.", 403);
+    }
+
+    // Verificação de identidade para ações sensíveis
+    if (verification) {
+      await verifyIdentity(session, verification);
     }
 
     // Verificar se o usuário pertence à organização
@@ -277,6 +312,8 @@ export async function exportUserData(userId: string) {
         goalMembers: { select: { id: true, goalId: true } },
       },
     });
+    // Remover campos sensíveis da exportação
+    const { cpfEncrypted, cpfHmacIndex, ...safeMemberDetail } = memberDetail || {};
 
     const sessions = await prisma.userSession.findMany({
       where: { userId },
@@ -302,7 +339,7 @@ export async function exportUserData(userId: string) {
       exportedAt: new Date().toISOString(),
       organizationId: scope.orgId,
       user,
-      membership: memberDetail,
+      membership: safeMemberDetail,
       sessions,
       notifications,
       comments,
@@ -326,7 +363,7 @@ export async function exportUserData(userId: string) {
  * Não afeta o usuário em outras organizações.
  * Não exclui registros para manter integridade referencial.
  */
-export async function anonymizeUserData(userId: string) {
+export async function anonymizeUserData(userId: string, verification?: { password?: string; totp?: string }) {
   return handleAction(async () => {
     const session = await requireSessionApi();
     const scope = await requireDataScope();
@@ -334,6 +371,11 @@ export async function anonymizeUserData(userId: string) {
     // Apenas OWNER/ADMIN/MANAGER podem anonimizar
     if (!["OWNER", "ADMIN", "MANAGER"].includes(scope.role)) {
       throw new AppError("FORBIDDEN", "Apenas administradores podem anonimizar dados.", 403);
+    }
+
+    // Verificação de identidade para ações sensíveis
+    if (verification) {
+      await verifyIdentity(session, verification);
     }
 
     // Verificar se o usuário pertence à organização
@@ -389,7 +431,7 @@ export async function anonymizeUserData(userId: string) {
  * Exclui dados de um usuário quando juridicamente cabível.
  * Só pode ser feito se não houver impedimento legal (ex: última OWNER).
  */
-export async function deleteUserData(userId: string) {
+export async function deleteUserData(userId: string, verification?: { password?: string; totp?: string }) {
   return handleAction(async () => {
     const session = await requireSessionApi();
     const scope = await requireDataScope();
@@ -397,6 +439,11 @@ export async function deleteUserData(userId: string) {
     // Apenas OWNER pode excluir dados de outros usuários
     if (userId !== session.sub && scope.role !== "OWNER") {
       throw new AppError("FORBIDDEN", "Apenas proprietários podem excluir dados de outros usuários.", 403);
+    }
+
+    // Verificação de identidade para ações sensíveis
+    if (verification) {
+      await verifyIdentity(session, verification);
     }
 
     // Verificar se o usuário é última OWNER da organização

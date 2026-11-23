@@ -173,7 +173,6 @@ export default function LandingPage() {
         <Stats />
         <Features />
         <UseCases />
-        <Integrations />
         <Testimonials />
         <HowItWorks />
         <Pricing />
@@ -328,32 +327,6 @@ function UseCases() {
             <h3 className="font-semibold">{u.title}</h3>
             <p className="mt-3 text-sm text-muted-foreground leading-relaxed">{u.desc}</p>
           </Card>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function Integrations() {
-  return (
-    <section className="page-container py-24 sm:py-32 border-y bg-muted/40">
-      <div className="mx-auto max-w-2xl text-center">
-        <p className="text-sm font-semibold text-blue-600">Integrações</p>
-        <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Integrações em evolução</h2>
-        <p className="mt-3 text-muted-foreground">
-          Conexões com ferramentas do seu dia a dia estão no nosso roadmap. Fale com a equipe para
-          consultar disponibilidade no seu plano.
-        </p>
-      </div>
-      <div className="mt-16 grid gap-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-        {INTEGRATIONS.map((i) => (
-          <div key={i.name} className="flex flex-col items-center gap-3 p-4 rounded-xl bg-white border border-border hover:border-blue-300 transition-all">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-              <div className="h-4 w-4 bg-blue-600 rounded" />
-            </div>
-            <span className="text-sm font-medium text-foreground">{i.name}</span>
-            <span className="text-xs text-muted-foreground">{i.desc}</span>
-          </div>
         ))}
       </div>
     </section>
