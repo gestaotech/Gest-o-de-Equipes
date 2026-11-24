@@ -62,8 +62,6 @@ const STEPS = [
   { n: "04", t: "Acompanhe tudo", d: "Dashboard em tempo real, agenda e comunicações." },
 ];
 
-const SALES_WHATSAPP = "https://wa.me/5561998361296";
-
 const FAQ = [
   {
     q: "O que é o TeamFlow?",
