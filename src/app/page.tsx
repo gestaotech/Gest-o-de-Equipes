@@ -158,9 +158,7 @@ function Header() {
           <Link href="/login" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
             Entrar
           </Link>
-          <Link href="/cadastro" className="inline-flex h-11 items-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700">
-            Começar grátis <ArrowRight className="h-4 w-4" />
-          </Link>
+          <a href="#contratacao" className="inline-flex h-11 items-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700">\n            Contratar sistema <ArrowRight className="h-4 w-4" />\n          </a>
         </div>
       </div>
     </header>
@@ -185,12 +183,7 @@ function Hero() {
           Colaboradores, departamentos, equipes, projetos, tarefas e metas organizados em uma plataforma que sua empresa realmente usa.
         </p>
         <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row sm:justify-center">
-          <Link href="/cadastro" className="inline-flex h-12 items-center gap-2 rounded-lg bg-blue-600 px-7 text-base font-medium text-white shadow-lg shadow-blue-600/20 transition-colors hover:bg-blue-700">
-            Começar grátis <ArrowRight className="h-4 w-4" />
-          </Link>
-          <a href="#planos" className="inline-flex h-12 items-center rounded-lg border border-border bg-background px-7 text-base font-medium text-foreground transition-colors hover:bg-accent">
-            Ver planos
-          </a>
+          <a href="#contratacao" className="inline-flex h-12 items-center gap-2 rounded-lg bg-blue-600 px-7 text-base font-medium text-white shadow-lg shadow-blue-600/20 transition-colors hover:bg-blue-700">\n            Ver opções de contratação <ArrowRight className="h-4 w-4" />\n          </a>\n          <a href="#recursos" className="inline-flex h-12 items-center rounded-lg border border-border bg-background px-7 text-base font-medium text-foreground transition-colors hover:bg-accent">\n            Conhecer recursos\n          </a>
         </div>
         <div className="mx-auto mt-14 grid max-w-5xl grid-cols-2 gap-6 sm:grid-cols-4 lg:grid-cols-6">
           {[
@@ -452,9 +445,7 @@ function FinalCta() {
         <h2 className="relative text-3xl font-bold tracking-tight sm:text-4xl">Pronto para organizar sua operação?</h2>
         <p className="relative mx-auto mt-3 max-w-xl text-blue-100">Crie sua conta grátis e monte o time, os projetos e as metas da sua empresa em minutos.</p>
         <div className="relative mt-7">
-          <Link href="/cadastro" className="inline-flex h-12 items-center gap-2 rounded-lg bg-white px-6 text-base font-medium text-blue-700 transition-colors hover:bg-blue-50">
-            Começar grátis <ArrowRight className="h-4 w-4" />
-          </Link>
+          <a href="#contratacao" className="inline-flex h-12 items-center gap-2 rounded-lg bg-white px-6 text-base font-medium text-blue-700 transition-colors hover:bg-blue-50">\n            Ver opções de contratação <ArrowRight className="h-4 w-4" />\n          </a>
         </div>
       </div>
     </section>
