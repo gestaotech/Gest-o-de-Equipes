@@ -21,7 +21,6 @@ import {
 import { Logo } from "@/components/ui/logo";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { PLANS as CATALOG_PLANS } from "@/lib/plans";
 
 const FEATURES = [
   {
@@ -63,51 +62,7 @@ const STEPS = [
   { n: "04", t: "Acompanhe tudo", d: "Dashboard em tempo real, agenda e comunicações." },
 ];
 
-const PLANS = CATALOG_PLANS.map((p) => {
-  const priceMonthly = p.priceMonthly > 0 ? p.priceMonthly : null;
-  const priceYearly = p.priceYearly > 0 ? p.priceYearly : null;
-
-  return {
-    id: p.tier,
-    name: p.name,
-    price:
-      priceMonthly
-        ? "R$ " + p.priceMonthly.toLocaleString("pt-BR", { minimumFractionDigits: 2 })
-        : priceYearly
-          ? "R$ " + p.priceYearly.toLocaleString("pt-BR", { minimumFractionDigits: 2 })
-          : "Sob consulta",
-    period:
-      priceMonthly
-        ? "/mês por empresa"
-        : priceYearly
-          ? "/ano por empresa"
-          : "/sob consulta",
-    desc:
-      p.name === "Mensal"
-        ? "Para pequenos times que precisam de organização essencial."
-        : p.name === "Anual"
-          ? "Para times em crescimento com relatórios avançados."
-          : "Para empresas que precisam de escala completa com integrações e IA.",
-    features: (() => {
-      const feats: string[] = [];
-      if (p.maxUsers) feats.push("Até " + p.maxUsers + " colaboradores");
-      if (p.maxTeams) feats.push("Até " + p.maxTeams + " equipes");
-      if (p.maxProjects) feats.push("Até " + p.maxProjects + " projetos");
-      else feats.push("Projetos ilimitados");
-      if (p.advancedReports) feats.push("Relatórios avançados");
-      if (p.integrations) feats.push("Integrações");
-      if (p.aiFeatures) feats.push("Recursos de IA");
-      return feats;
-    })(),
-    cta:
-      p.priceYearly > 0 && p.priceMonthly === 0
-        ? "Assinar anual"
-        : p.priceMonthly > 0
-          ? "Assinar mensal"
-          : "Falar com vendas",
-    highlight: p.tier === "ANUAL",
-  };
-});
+const SALES_WHATSAPP = "https://wa.me/5561998361296";
 
 const FAQ = [
   {
@@ -116,7 +71,7 @@ const FAQ = [
   },
   {
     q: "Preciso de cartão de crédito para começar?",
-    a: "Não. Comece com 14 dias grátis, sem cartão de crédito.",
+    a: "A contratação é alinhada diretamente com nossa equipe comercial. Você escolhe a modalidade e recebe uma proposta adequada à sua operação.",
   },
   {
     q: "Meus dados ficam seguros?",
@@ -124,11 +79,11 @@ const FAQ = [
   },
   {
     q: "Posso cancelar quando quiser?",
-    a: "Sim. Você pode fazer downgrade ou cancelar a assinatura a qualquer momento, sem multa.",
+    a: "As condições comerciais, valores e forma de pagamento são apresentados pela equipe durante o atendimento.",
   },
   {
     q: "Posso mudar de plano depois?",
-    a: "Sim. Você pode alterar seu plano a qualquer momento e as mudanças valem a partir do próximo ciclo de cobrança.",
+    a: "Sim. Converse com nossa equipe para avaliar a mudança de modalidade e as necessidades da sua empresa.",
   },
 ];
 
@@ -196,7 +151,7 @@ function Header() {
         <nav className="hidden items-center gap-6 text-sm font-medium text-muted-foreground md:flex">
           <a href="#recursos" className="transition-colors hover:text-foreground">Recursos</a>
           <a href="#como-funciona" className="transition-colors hover:text-foreground">Como funciona</a>
-          <a href="#planos" className="transition-colors hover:text-foreground">Planos</a>
+          <a href="#contratacao" className="transition-colors hover:text-foreground">Contratação</a>
           <a href="#faq" className="transition-colors hover:text-foreground">FAQ</a>
         </nav>
         <div className="flex items-center gap-3">
@@ -411,39 +366,59 @@ function HowItWorks() {
 }
 
 function Pricing() {
+  const options = [
+    {
+      title: "Sistema sem integração",
+      label: "Operação independente",
+      description: "Use o TeamFlow de forma independente para organizar colaboradores, equipes, projetos, tarefas, metas e rotinas da sua empresa.",
+      features: ["Implantação do sistema", "Configuração da organização", "Gestão de equipes e projetos", "Atendimento comercial"],
+      message: "Olá! Tenho interesse em contratar o TeamFlow sem integração entre sistemas. Gostaria de receber uma proposta.",
+      highlighted: false,
+    },
+    {
+      title: "Sistema com integração",
+      label: "Ecossistema conectado",
+      description: "Além do sistema de gestão, converse com nossa equipe sobre a integração com outras soluções da Gestão Tech e o escopo adequado à sua operação.",
+      features: ["Todos os recursos do sistema", "Levantamento das integrações necessárias", "Avaliação técnica de compatibilidade", "Proposta comercial personalizada"],
+      message: "Olá! Tenho interesse em contratar o TeamFlow com integração entre sistemas. Gostaria de conversar sobre as possibilidades e receber uma proposta.",
+      highlighted: true,
+    },
+  ];
+
   return (
-    <section id="planos" className="page-container py-24 sm:py-24">
-      <div className="mx-auto max-w-2xl text-center">
-        <p className="text-sm font-semibold text-blue-600">Planos</p>
-        <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Escolha o plano certo</h2>
-        <p className="mt-3 text-muted-foreground">Comece grátis e evolua quando sua equipe crescer.</p>
+    <section id="contratacao" className="page-container py-24 sm:py-28">
+      <div className="mx-auto max-w-3xl text-center">
+        <p className="text-sm font-semibold text-blue-600">Contrate com atendimento especializado</p>
+        <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Escolha como sua empresa quer trabalhar</h2>
+        <p className="mt-3 text-muted-foreground">Selecione a modalidade e fale diretamente com nossa equipe. Vamos entender sua necessidade e apresentar uma proposta.</p>
       </div>
-      <div className="mt-16 grid gap-6 lg:grid-cols-3">
-        {PLANS.map((p) => (
-          <div key={p.name} className={p.highlight ? "relative rounded-xl border-2 border-blue-600 bg-card p-6 shadow-lg" : "rounded-xl border bg-card p-6"}>
-            {p.highlight && (
-              <span className="absolute -top-3 left-6 rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white">Mais popular</span>
-            )}
-            <h3 className="font-semibold">{p.name}</h3>
-            <p className="mt-2 text-sm text-muted-foreground">{p.desc}</p>
-            <div className="mt-4 flex items-baseline gap-1">
-              <span className="text-3xl font-bold">{p.price}</span>
-              <span className="text-sm text-muted-foreground">{p.period}</span>
-            </div>
-            <ul className="mt-5 space-y-2.5">
-              {p.features.map((f) => (
-                <li key={f} className="flex items-start gap-2 text-sm">
+      <div className="mx-auto mt-14 grid max-w-5xl gap-6 lg:grid-cols-2">
+        {options.map((option) => (
+          <div key={option.title} className={option.highlighted ? "relative rounded-2xl border-2 border-blue-600 bg-card p-7 shadow-lg" : "rounded-2xl border bg-card p-7 shadow-sm"}>
+            {option.highlighted && <span className="absolute -top-3 left-6 rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white">Integração personalizada</span>}
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">{option.label}</p>
+            <h3 className="mt-3 text-2xl font-bold text-foreground">{option.title}</h3>
+            <p className="mt-3 min-h-20 text-sm leading-relaxed text-muted-foreground">{option.description}</p>
+            <ul className="mt-6 space-y-3">
+              {option.features.map((feature) => (
+                <li key={feature} className="flex items-start gap-2 text-sm">
                   <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
-                  <span className="text-foreground">{f}</span>
+                  <span>{feature}</span>
                 </li>
               ))}
             </ul>
-            <Link href={p.id === "ECOSISTEMA" ? "https://wa.me/5561998361296" : "/cadastro?plan=" + p.id} className={p.highlight ? "mt-6 inline-flex h-11 w-full items-center justify-center rounded-lg bg-blue-600 text-sm font-medium text-white transition-colors hover:bg-blue-700" : "mt-6 inline-flex h-11 w-full items-center justify-center rounded-lg border border-border text-sm font-medium transition-colors hover:bg-accent"}>
-              {p.cta}
-            </Link>
+            <a
+              href={`${SALES_WHATSAPP}?text=${encodeURIComponent(option.message)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={option.highlighted ? "mt-8 inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-semibold text-white transition-colors hover:bg-blue-700" : "mt-8 inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg border border-border px-5 text-sm font-semibold text-foreground transition-colors hover:bg-accent"}
+            >
+              <MessageSquare className="h-4 w-4" /> Falar com vendas pelo WhatsApp
+            </a>
           </div>
         ))}
       </div>
+      <p className="mt-8 text-center text-xs text-muted-foreground">Valores, prazos e escopo são definidos com a equipe comercial após entender as necessidades da sua empresa.</p>
     </section>
   );
 }
@@ -493,7 +468,7 @@ function Footer() {
         <Logo />
         <div className="flex gap-6 text-sm text-muted-foreground">
           <a href="#recursos" className="hover:text-foreground">Recursos</a>
-          <a href="#planos" className="hover:text-foreground">Planos</a>
+          <a href="#contratacao" className="hover:text-foreground">Contratação</a>
           <a href="#faq" className="hover:text-foreground">FAQ</a>
         </div>
         <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} TeamFlow. Todos os direitos reservados.</p>
