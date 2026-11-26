@@ -23,7 +23,9 @@ export async function GET(request: NextRequest) {
     switch (action) {
       case "list": {
         const result = await listLGPDRequests();
-        return NextResponse.json(result);
+        const response = NextResponse.json(result);
+        response.headers.set("Cache-Control", "private, no-store");
+        return response;
       }
       case "export": {
         const userId = searchParams.get("userId");
@@ -31,23 +33,16 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ error: "userId é obrigatório." }, { status: 400 });
         }
         const result = await exportUserData(userId);
-        return NextResponse.json(result);
+        const response = NextResponse.json(result);
+        response.headers.set("Cache-Control", "private, no-store");
+        return response;
       }
-      case "anonymize": {
-        const userId = searchParams.get("userId");
-        if (!userId) {
-          return NextResponse.json({ error: "userId é obrigatório." }, { status: 400 });
-        }
-        const result = await anonymizeUserData(userId);
-        return NextResponse.json(result);
-      }
+      case "anonymize":
       case "delete": {
-        const userId = searchParams.get("userId");
-        if (!userId) {
-          return NextResponse.json({ error: "userId é obrigatório." }, { status: 400 });
-        }
-        const result = await deleteUserData(userId);
-        return NextResponse.json(result);
+        return NextResponse.json(
+          { error: "Operações de anonimização e exclusão não podem ser executadas por GET." },
+          { status: 405 }
+        );
       }
       default: {
         return NextResponse.json({ error: "Ação não especificada." }, { status: 400 });
@@ -71,7 +66,9 @@ export async function POST(request: NextRequest) {
       // userId e requesterId são definidos na action com base na sessão
     });
 
-    return NextResponse.json(result, { status: 201 });
+    const response = NextResponse.json(result, { status: 201 });
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro interno.";
     const statusCode = error instanceof AppError ? error.status : 500;
@@ -102,10 +99,9 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error) {
-    return NextResponse.json(
-      { error: (error as Error).message || "Erro interno." },
-      { status: (error as { statusCode?: number }).statusCode ?? 500 }
-    );
+    const message = error instanceof Error ? error.message : "Erro interno.";
+    const statusCode = error instanceof AppError ? error.status : 500;
+    return NextResponse.json({ error: message }, { status: statusCode });
   }
 }
 
@@ -123,9 +119,8 @@ export async function DELETE(request: NextRequest) {
     const result = await deleteUserData(userId);
     return NextResponse.json(result);
   } catch (error) {
-    return NextResponse.json(
-      { error: (error as Error).message || "Erro interno." },
-      { status: (error as { statusCode?: number }).statusCode ?? 500 }
-    );
+    const message = error instanceof Error ? error.message : "Erro interno.";
+    const statusCode = error instanceof AppError ? error.status : 500;
+    return NextResponse.json({ error: message }, { status: statusCode });
   }
 }
