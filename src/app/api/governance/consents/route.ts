@@ -1,21 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSessionApi } from "@/lib/auth";
 import { requireDataScope } from "@/server/scope";
 import { prisma } from "@/lib/prisma";
 import { AppError } from "@/lib/errors";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
-
     const consents = await prisma.consent.findMany({
-      where: { userId: session.sub, organizationId: scope.orgId },
+      where: { userId: scope.session.sub, organizationId: scope.orgId },
       include: { policy: { select: { id: true, title: true, version: true } } },
       orderBy: { grantedAt: "desc" },
     });
-
-    return NextResponse.json({ consents });
+    return NextResponse.json({ consents, headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro interno.";
     const statusCode = error instanceof AppError ? error.status : 500;
@@ -25,13 +21,15 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
     const body: Record<string, unknown> = await request.json();
+    if (typeof body.policyId !== "string" || !body.policyId.trim()) {
+      return NextResponse.json({ error: "Política inválida." }, { status: 400 });
+    }
 
     const policy = await prisma.privacyPolicy.findFirst({
       where: {
-        id: body.policyId as string,
+        id: body.policyId,
         organizationId: scope.orgId,
         isActive: true,
       },
@@ -40,26 +38,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Política de privacidade ativa não encontrada." }, { status: 404 });
     }
 
+    const forwarded = request.headers.get("x-forwarded-for");
+    const ipAddress = forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || null;
+    const userAgent = request.headers.get("user-agent") || null;
+
     const consent = await prisma.consent.upsert({
-      where: { userId_policyId: { userId: session.sub, policyId: body.policyId as string } },
+      where: { userId_policyId: { userId: scope.session.sub, policyId: policy.id } },
       create: {
         organizationId: scope.orgId,
-        userId: session.sub,
-        policyId: body.policyId as string,
+        userId: scope.session.sub,
+        policyId: policy.id,
         version: policy.version,
-        ipAddress: body.ipAddress as string | undefined,
-        userAgent: body.userAgent as string | undefined,
+        ipAddress,
+        userAgent,
       },
       update: {
         version: policy.version,
         grantedAt: new Date(),
         revokedAt: null,
-        ipAddress: body.ipAddress as string | undefined,
-        userAgent: body.userAgent as string | undefined,
+        ipAddress,
+        userAgent,
       },
     });
 
-    return NextResponse.json({ consent }, { status: 201 });
+    const response = NextResponse.json({ consent }, { status: 201 });
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro interno.";
     const statusCode = error instanceof AppError ? error.status : 500;
