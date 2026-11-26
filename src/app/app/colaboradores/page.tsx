@@ -20,10 +20,17 @@ function getAllowedRoles(userRole: RoleName): { label: string; value: string }[]
       { label: "Membro", value: "MEMBER" },
     ];
   }
-  // ADMIN: pode atribuir apenas papéis inferiores ao seu.
+  // ADMIN pode gerenciar gerentes, líderes e membros.
   if (userRole === "ADMIN") {
     return [
       { label: "Gerente", value: "MANAGER" },
+      { label: "Líder", value: "LEADER" },
+      { label: "Membro", value: "MEMBER" },
+    ];
+  }
+  // MANAGER pode gerenciar apenas líderes e membros.
+  if (userRole === "MANAGER") {
+    return [
       { label: "Líder", value: "LEADER" },
       { label: "Membro", value: "MEMBER" },
     ];
