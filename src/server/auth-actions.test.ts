@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { requestReset, resetPassword, completeFirstAccess } from "@/server/auth-actions";
-import { AppError } from "@/lib/errors";
 
 vi.mock("@prisma/client", () => ({
   Prisma: { PrismaClientKnownRequestError: class {} },
