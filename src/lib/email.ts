@@ -122,12 +122,10 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
     
     case 'none':
     default: {
-      console.warn(
-        '[EMAIL] Provedor de e-mail não configurado. ' +
-        'Token registrado em log apenas. Configure EMAIL_PROVIDER e SMTP_* ' +
-        'para habilitar envio real.'
+      // Não simular sucesso: fluxos como recuperação de senha dependem da entrega.
+      throw new Error(
+        'Envio de e-mail indisponível. Configure EMAIL_PROVIDER=smtp e as variáveis SMTP_HOST, SMTP_USER, SMTP_PASSWORD e SMTP_FROM.'
       );
-      break;
     }
   }
 }
