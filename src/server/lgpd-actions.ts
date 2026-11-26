@@ -49,9 +49,8 @@ export async function createLGPDRequest(input: unknown) {
     const scope = await requireDataScope();
     const data = lgpdRequestSchema.parse(input);
 
-    // Apenas OWNER, ADMIN, MANAGER podem criar solicitações para outros usuários
-    // MEMBER só pode criar para si mesmo
-    if (data.userId !== session.sub && !["OWNER", "ADMIN", "MANAGER"].includes(scope.role)) {
+    // Apenas OWNER e ADMIN podem abrir solicitações em nome de outros usuários.
+    if (data.userId !== session.sub && !["OWNER", "ADMIN"].includes(scope.role)) {
       throw new AppError("FORBIDDEN", "Você só pode criar solicitações para seus próprios dados.", 403);
     }
 
@@ -106,7 +105,7 @@ export async function listLGPDRequests() {
     const session = await requireSessionApi();
     const scope = await requireDataScope();
 
-    const where = scope.level === "ORG"
+    const where = ["OWNER", "ADMIN"].includes(scope.role)
       ? { organizationId: scope.orgId }
       : { organizationId: scope.orgId, userId: session.sub };
 
@@ -139,8 +138,8 @@ export async function updateLGPDRequestStatus(input: unknown) {
     const scope = await requireDataScope();
     const data = lgpdUpdateStatusSchema.parse(input);
 
-    // Apenas administradores podem atualizar status
-    if (!["OWNER", "ADMIN", "MANAGER"].includes(scope.role)) {
+    // Apenas OWNER e ADMIN podem tratar solicitações de titulares.
+    if (!["OWNER", "ADMIN"].includes(scope.role)) {
       throw new AppError("FORBIDDEN", "Apenas administradores podem atualizar solicitações LGPD.", 403);
     }
 
@@ -210,7 +209,7 @@ export async function getLGPDRequest(requestId: string) {
     const session = await requireSessionApi();
     const scope = await requireDataScope();
 
-    const where = scope.level === "ORG"
+    const where = ["OWNER", "ADMIN"].includes(scope.role)
       ? { id: requestId, organizationId: scope.orgId }
       : { id: requestId, organizationId: scope.orgId, userId: session.sub };
 
@@ -243,8 +242,8 @@ export async function exportUserData(userId: string) {
     const session = await requireSessionApi();
     const scope = await requireDataScope();
 
-    // Apenas o próprio usuário ou admin pode exportar
-    if (userId !== session.sub && !["OWNER", "ADMIN", "MANAGER"].includes(scope.role)) {
+    // Apenas o próprio usuário ou OWNER/ADMIN pode exportar dados de terceiros.
+    if (userId !== session.sub && !["OWNER", "ADMIN"].includes(scope.role)) {
       throw new AppError("FORBIDDEN", "Você só pode exportar seus próprios dados.", 403);
     }
 
@@ -331,8 +330,8 @@ export async function anonymizeUserData(userId: string) {
     const session = await requireSessionApi();
     const scope = await requireDataScope();
 
-    // Apenas OWNER/ADMIN/MANAGER podem anonimizar
-    if (!["OWNER", "ADMIN", "MANAGER"].includes(scope.role)) {
+    // Apenas OWNER e ADMIN podem anonimizar dados de terceiros.
+    if (!["OWNER", "ADMIN"].includes(scope.role)) {
       throw new AppError("FORBIDDEN", "Apenas administradores podem anonimizar dados.", 403);
     }
 
