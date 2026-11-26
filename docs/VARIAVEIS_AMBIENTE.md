@@ -6,7 +6,7 @@ Guia das variáveis usadas pelo TeamFlow. Valores reais devem ficar só no `.env
 
 | Variável | Descrição |
 |---|---|
-| `DATABASE_URL` | Conexão PostgreSQL. No Neon, use a URL com SSL (`sslmode=require`). Para comandos de migration (`prisma migrate`), prefira a URL direta (sem `-pooler`); a aplicação pode usar o pooler. |
+| `DATABASE_URL` | Conexão PostgreSQL usada pela aplicação. No Neon/Vercel, use a connection string pooled da branch `production` (host com `-pooler`) e SSL (`sslmode=require`). O valor atual de produção precisa ser corrigido antes de liberar o sistema. Para migrations, use conexão direta (sem `-pooler`) ao executar os comandos manualmente. |
 | `AUTH_SECRET` | Chave para assinar os JWTs de sessão. Gere uma string aleatória com 32+ caracteres. |
 | `ENCRYPTION_KEY` | Chave mestra da criptografia AES-256-GCM (CPF e segredos de 2FA). Mínimo 32 caracteres. |
 | `ENCRYPTION_HMAC_KEY` | Chave independente para o índice HMAC de busca por CPF. Mínimo 32 caracteres e diferente de `ENCRYPTION_KEY`. |
@@ -16,15 +16,17 @@ Guia das variáveis usadas pelo TeamFlow. Valores reais devem ficar só no `.env
 | Variável | Descrição |
 |---|---|
 | `NEXT_PUBLIC_APP_URL` | URL base pública do app (layout/metadata). Ex.: `https://seu-dominio.vercel.app`. |
-| `PUBLIC_APP_URL` | URL usada nos links de e-mail (primeiro acesso e redefinição de senha). Hoje o código lê esta variável; use o mesmo valor de `NEXT_PUBLIC_APP_URL`. |
+| `PUBLIC_APP_URL` | URL base usada nos links de recuperação de senha por e-mail; use o mesmo valor de `NEXT_PUBLIC_APP_URL`. O primeiro acesso de colaboradores é entregue como link de uso único para o administrador copiar e encaminhar. |
 
-## Billing (Asaas)
+## Billing (Asaas) — adiado
+
+`ASAAS_ENABLED` deve permanecer `false` enquanto a contratação for feita via WhatsApp. O checkout `/contratar` redireciona para a página pública, a action de checkout retorna indisponibilidade e o webhook responde 503. Só defina `ASAAS_ENABLED=true` quando o fluxo for revalidado e reativado.
 
 | Variável | Descrição |
 |---|---|
-| `ASAAS_API_KEY` | Chave da API Asaas. Hoje nenhum módulo a utiliza: a cobrança foi removida e precisa ser reimplementada antes de ser necessária. |
-| `ASAAS_ENVIRONMENT` | `sandbox` (padrão) ou `production`. Em produção, defina `production`; sem isso a integração usa a API de sandbox. |
-| `ASAAS_WEBHOOK_TOKEN` | Token de autenticação do webhook, enviado pela Asaas no header `asaas-access-token`. Obrigatório para `POST /api/webhooks/asaas` (sem ele o endpoint responde 503). Configure o mesmo valor no painel de webhooks da Asaas. |
+| `ASAAS_API_KEY` | Chave da API Asaas. Integração adiada; não habilitar até revisão e reimplementação do fluxo de cobrança. |
+| `ASAAS_ENVIRONMENT` | Mantida para uso futuro. Não é necessária para o fluxo atual de contratação via WhatsApp. |
+| `ASAAS_WEBHOOK_TOKEN` | Mantida para uso futuro. Não cadastrar webhook enquanto a integração estiver adiada. |
 
 ## Cron e retenção
 
@@ -43,14 +45,14 @@ Guia das variáveis usadas pelo TeamFlow. Valores reais devem ficar só no `.env
 | `SMTP_PASSWORD` | Senha SMTP. |
 | `SMTP_FROM` | Remetente (padrão `nao-responda@teamflow.local`). |
 
-Com `EMAIL_PROVIDER=none`, os e-mails de primeiro acesso e redefinição de senha não são enviados. Em desenvolvimento, `console` registra o conteúdo no log.
+Com `EMAIL_PROVIDER=none`, a recuperação de senha informa indisponibilidade; não simula envio. O link de primeiro acesso é disponibilizado ao administrador na tela de colaboradores para encaminhamento seguro. Em desenvolvimento, `console` registra o conteúdo no log.
 
-## Ordem de deploy (webhook e retenção)
+## Ordem de deploy
 
-1. Aplicar as migrations pendentes no banco antes do deploy que depende delas.
-2. Configurar no Vercel: `ASAAS_WEBHOOK_TOKEN`, `ASAAS_ENVIRONMENT=production`, `CRON_SECRET` e as chaves de criptografia.
-3. Fazer o deploy.
-4. Cadastrar o webhook na Asaas para `https://<domínio>/api/webhooks/asaas` com o mesmo `ASAAS_WEBHOOK_TOKEN`.
+1. Configurar no Vercel `DATABASE_URL`, `CRON_SECRET` e as chaves de autenticação/criptografia.
+2. Configurar SMTP se a recuperação de senha por e-mail for necessária.
+3. Fazer o deploy e validar login, cadastro e persistência.
+4. Manter webhook Asaas desativado até reativação formal da integração.
 
 ## Observações
 

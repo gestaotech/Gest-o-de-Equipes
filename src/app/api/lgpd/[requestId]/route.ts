@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSessionApi } from "@/lib/auth";
-import { requireDataScope } from "@/server/scope";
+import { AppError } from "@/lib/errors";
 import { getLGPDRequest } from "@/server/lgpd-actions";
 
 export async function GET(
@@ -8,16 +7,15 @@ export async function GET(
   { params }: { params: Promise<{ requestId: string }> }
 ) {
   try {
-    const session = await requireSessionApi();
-    const scope = await requireDataScope();
     const { requestId } = await params;
-
     const result = await getLGPDRequest(requestId);
-    return NextResponse.json(result);
+    const response = NextResponse.json(result);
+    response.headers.set("Cache-Control", "private, no-store");
+    void request;
+    return response;
   } catch (error) {
-    return NextResponse.json(
-      { error: (error as Error).message || "Erro interno." },
-      { status: (error as { statusCode?: number }).statusCode ?? 500 }
-    );
+    const message = error instanceof Error ? error.message : "Erro interno.";
+    const statusCode = error instanceof AppError ? error.status : 500;
+    return NextResponse.json({ error: message }, { status: statusCode });
   }
 }

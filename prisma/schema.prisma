@@ -214,6 +214,7 @@ model Organization {
   slug      String   @unique
   segment   String?
   size      String?
+  asaasCustomerId String? @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

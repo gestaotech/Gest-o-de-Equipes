@@ -2,12 +2,12 @@
 
 import { prisma } from "@/lib/prisma";
 import { handleAction, AppError, ok } from "@/lib/errors";
-import { requireSessionApi } from "@/lib/auth";
+import { headers } from "next/headers";
 import { requireDataScope } from "@/server/scope";
-import { guardPerm } from "@/server/guards";
+import { guardPerm, guardRole, validateOrgReferences } from "@/server/guards";
 import { logActivity } from "@/server/activity";
 import z from "zod";
-import { DataCategory, DataSubjectCategory, LegalBasis, SharingType, IncidentSeverity } from "@prisma/client";
+import { DataCategory, DataSubjectCategory, LegalBasis, SharingType } from "@prisma/client";
 import { RETENTION_ENTITY_TYPES, RETENTION_ACTIONS, MIN_RETENTION_DAYS } from "@/lib/retention";
 
 // ============================================================================
@@ -31,8 +31,8 @@ const processingRecordSchema = z.object({
 
 export async function listProcessingRecords() {
   return handleAction(async () => {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
+    guardRole(scope.membership, "ADMIN");
 
     const records = await prisma.processingRecord.findMany({
       where: { organizationId: scope.orgId },
@@ -45,7 +45,6 @@ export async function listProcessingRecords() {
 
 export async function createProcessingRecord(input: unknown) {
   return handleAction(async () => {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
     guardPerm(scope.membership, "settings.write");
     const data = processingRecordSchema.parse(input);
@@ -81,7 +80,6 @@ export async function createProcessingRecord(input: unknown) {
 
 export async function updateProcessingRecord(input: { id: string } & Record<string, unknown>) {
   return handleAction(async () => {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
     guardPerm(scope.membership, "settings.write");
     const data = processingRecordSchema.parse(input);
@@ -124,7 +122,6 @@ export async function updateProcessingRecord(input: { id: string } & Record<stri
 
 export async function deleteProcessingRecord(id: string) {
   return handleAction(async () => {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
     guardPerm(scope.membership, "settings.write");
 
@@ -163,7 +160,6 @@ const privacyPolicySchema = z.object({
 
 export async function listPrivacyPolicies() {
   return handleAction(async () => {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
 
     const policies = await prisma.privacyPolicy.findMany({
@@ -177,29 +173,28 @@ export async function listPrivacyPolicies() {
 
 export async function createPrivacyPolicy(input: unknown) {
   return handleAction(async () => {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
     guardPerm(scope.membership, "settings.write");
     const data = privacyPolicySchema.parse(input);
 
-    // Se está ativando esta política, desativa as outras
-    if (data.isActive) {
-      await prisma.privacyPolicy.updateMany({
-        where: { organizationId: scope.orgId },
-        data: { isActive: false },
+    const policy = await prisma.$transaction(async (tx) => {
+      if (data.isActive) {
+        await tx.privacyPolicy.updateMany({
+          where: { organizationId: scope.orgId },
+          data: { isActive: false },
+        });
+      }
+      return tx.privacyPolicy.create({
+        data: {
+          organizationId: scope.orgId,
+          title: data.title,
+          version: data.version,
+          content: data.content,
+          effectiveFrom: new Date(data.effectiveFrom),
+          effectiveTo: data.effectiveTo ? new Date(data.effectiveTo) : null,
+          isActive: data.isActive,
+        },
       });
-    }
-
-    const policy = await prisma.privacyPolicy.create({
-      data: {
-        organizationId: scope.orgId,
-        title: data.title,
-        version: data.version,
-        content: data.content,
-        effectiveFrom: new Date(data.effectiveFrom),
-        effectiveTo: data.effectiveTo ? new Date(data.effectiveTo) : null,
-        isActive: data.isActive,
-      },
     });
 
     await logActivity({
@@ -215,7 +210,6 @@ export async function createPrivacyPolicy(input: unknown) {
 
 export async function setActivePrivacyPolicy(policyId: string) {
   return handleAction(async () => {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
     guardPerm(scope.membership, "settings.write");
 
@@ -226,14 +220,16 @@ export async function setActivePrivacyPolicy(policyId: string) {
       throw new AppError("NOT_FOUND", "Política de privacidade não encontrada.", 404);
     }
 
-    // Desativa todas e ativa a selecionada
-    await prisma.privacyPolicy.updateMany({
-      where: { organizationId: scope.orgId },
-      data: { isActive: false },
-    });
-    await prisma.privacyPolicy.update({
-      where: { id: policyId },
-      data: { isActive: true },
+    // Desativa todas e ativa a selecionada atomicamente.
+    await prisma.$transaction(async (tx) => {
+      await tx.privacyPolicy.updateMany({
+        where: { organizationId: scope.orgId },
+        data: { isActive: false },
+      });
+      await tx.privacyPolicy.update({
+        where: { id: policyId },
+        data: { isActive: true },
+      });
     });
 
     await logActivity({
@@ -253,13 +249,10 @@ export async function setActivePrivacyPolicy(policyId: string) {
 
 const consentSchema = z.object({
   policyId: z.string().min(1),
-  ipAddress: z.string().optional(),
-  userAgent: z.string().optional(),
 });
 
 export async function grantConsent(input: unknown) {
   return handleAction(async () => {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
     const data = consentSchema.parse(input);
 
@@ -270,22 +263,27 @@ export async function grantConsent(input: unknown) {
       throw new AppError("NOT_FOUND", "Política de privacidade ativa não encontrada.", 404);
     }
 
+    const requestHeaders = await headers();
+    const forwarded = requestHeaders.get("x-forwarded-for");
+    const ipAddress = forwarded?.split(",")[0]?.trim() || requestHeaders.get("x-real-ip") || null;
+    const userAgent = requestHeaders.get("user-agent") || null;
+
     const consent = await prisma.consent.upsert({
-      where: { userId_policyId: { userId: session.sub, policyId: data.policyId } },
+      where: { userId_policyId: { userId: scope.session.sub, policyId: data.policyId } },
       create: {
         organizationId: scope.orgId,
-        userId: session.sub,
+        userId: scope.session.sub,
         policyId: data.policyId,
         version: policy.version,
-        ipAddress: data.ipAddress,
-        userAgent: data.userAgent,
+        ipAddress,
+        userAgent,
       },
       update: {
         version: policy.version,
         grantedAt: new Date(),
         revokedAt: null,
-        ipAddress: data.ipAddress,
-        userAgent: data.userAgent,
+        ipAddress,
+        userAgent,
       },
     });
 
@@ -302,11 +300,10 @@ export async function grantConsent(input: unknown) {
 
 export async function revokeConsent(policyId: string) {
   return handleAction(async () => {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
 
     const consent = await prisma.consent.findFirst({
-      where: { userId: session.sub, policyId, organizationId: scope.orgId },
+      where: { userId: scope.session.sub, policyId, organizationId: scope.orgId },
     });
     if (!consent) {
       throw new AppError("NOT_FOUND", "Consentimento não encontrado.", 404);
@@ -330,11 +327,10 @@ export async function revokeConsent(policyId: string) {
 
 export async function listConsents() {
   return handleAction(async () => {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
 
     const consents = await prisma.consent.findMany({
-      where: { userId: session.sub, organizationId: scope.orgId },
+      where: { userId: scope.session.sub, organizationId: scope.orgId },
       include: { policy: { select: { id: true, title: true, version: true } } },
       orderBy: { grantedAt: "desc" },
     });
@@ -359,8 +355,8 @@ const retentionPolicySchema = z.object({
 
 export async function listRetentionPolicies() {
   return handleAction(async () => {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
+    guardRole(scope.membership, "ADMIN");
 
     const policies = await prisma.retentionPolicy.findMany({
       where: { organizationId: scope.orgId },
@@ -373,7 +369,6 @@ export async function listRetentionPolicies() {
 
 export async function createRetentionPolicy(input: unknown) {
   return handleAction(async () => {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
     guardPerm(scope.membership, "settings.write");
     const data = retentionPolicySchema.parse(input);
@@ -413,8 +408,8 @@ const securityIncidentSchema = z.object({
   severity: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
   systemsAffected: z.string().optional(),
   dataCompromised: z.string().optional(),
-  subjectsAffected: z.number().optional(),
-  organizationsAffected: z.number().optional(),
+  subjectsAffected: z.number().int().nonnegative().optional(),
+  organizationsAffected: z.number().int().nonnegative().optional(),
   containmentMeasures: z.string().optional(),
   responsePlan: z.string().optional(),
   responsibleId: z.string().optional(),
@@ -423,8 +418,8 @@ const securityIncidentSchema = z.object({
 
 export async function listSecurityIncidents() {
   return handleAction(async () => {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
+    guardRole(scope.membership, "ADMIN");
 
     const incidents = await prisma.securityIncident.findMany({
       where: { organizationId: scope.orgId },
@@ -440,10 +435,12 @@ export async function listSecurityIncidents() {
 
 export async function createSecurityIncident(input: unknown) {
   return handleAction(async () => {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
     guardPerm(scope.membership, "settings.write");
     const data = securityIncidentSchema.parse(input);
+
+    const responsibleId = data.responsibleId || scope.membership.id;
+    await validateOrgReferences(scope.orgId, { members: [responsibleId] });
 
     const incident = await prisma.securityIncident.create({
       data: {
@@ -458,7 +455,7 @@ export async function createSecurityIncident(input: unknown) {
         organizationsAffected: data.organizationsAffected,
         containmentMeasures: data.containmentMeasures,
         responsePlan: data.responsePlan,
-        responsibleId: data.responsibleId || session.sub,
+        responsibleId,
         evidenceUrl: data.evidenceUrl,
       },
       include: {
@@ -479,7 +476,6 @@ export async function createSecurityIncident(input: unknown) {
 
 export async function updateSecurityIncident(input: { id: string } & Record<string, unknown>) {
   return handleAction(async () => {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
     guardPerm(scope.membership, "settings.write");
     const data = securityIncidentSchema.parse(input);
@@ -489,6 +485,10 @@ export async function updateSecurityIncident(input: { id: string } & Record<stri
     });
     if (!incident) {
       throw new AppError("NOT_FOUND", "Incidente não encontrado.", 404);
+    }
+
+    if (data.responsibleId) {
+      await validateOrgReferences(scope.orgId, { members: [data.responsibleId] });
     }
 
     const updated = await prisma.securityIncident.update({
@@ -504,8 +504,8 @@ export async function updateSecurityIncident(input: { id: string } & Record<stri
         organizationsAffected: data.organizationsAffected,
         containmentMeasures: data.containmentMeasures,
         responsePlan: data.responsePlan,
+        ...(data.responsibleId ? { responsibleId: data.responsibleId } : {}),
         evidenceUrl: data.evidenceUrl,
-        ...(incident.status === "RESOLVED" ? {} : {}),
       },
       include: {
         responsible: { select: { id: true, name: true, email: true } },
@@ -525,7 +525,6 @@ export async function updateSecurityIncident(input: { id: string } & Record<stri
 
 export async function resolveSecurityIncident(incidentId: string) {
   return handleAction(async () => {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
     guardPerm(scope.membership, "settings.write");
 

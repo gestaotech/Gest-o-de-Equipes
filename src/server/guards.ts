@@ -119,48 +119,31 @@ export async function validateOrgReferences(
 
 /** Verifica se o ator pode criar um membro com o papel informado. */
 export function canCreateMember(actorMembership: OrganizationMember, targetRole: RoleName): boolean {
-  const actorRole = actorMembership.role;
-  // OWNER pode criar qualquer um
-  if (actorRole === "OWNER") return true;
-  // MANAGER pode criar exceto OWNER
-  if (actorRole === "MANAGER") return targetRole !== "OWNER";
-  // LEADER e MEMBER não podem criar ninguém
-  return false;
+  if (actorMembership.role === "OWNER") return true;
+  // Cada papel só pode conceder papéis hierarquicamente inferiores.
+  return ROLE_ORDER[actorMembership.role] > ROLE_ORDER[targetRole];
 }
 
 /** Verifica se o ator pode alterar o papel de um membro. */
 export function canChangeMemberRole(actorMembership: OrganizationMember, targetRole: RoleName): boolean {
-  const actorRole = actorMembership.role;
-  // OWNER pode mudar qualquer um para qualquer role
-  if (actorRole === "OWNER") return true;
-  // MANAGER pode mudar exceto para OWNER
-  if (actorRole === "MANAGER") return targetRole !== "OWNER";
-  // LEADER e MEMBER não podem mudar role
-  return false;
+  if (actorMembership.role === "OWNER") return true;
+  return ROLE_ORDER[actorMembership.role] > ROLE_ORDER[targetRole];
 }
 
 /** Verifica se o ator pode desativar um membro. */
 export function canDeactivateMember(actorMembership: OrganizationMember, targetMembership: OrganizationMember): boolean {
   const actorRole = actorMembership.role;
   const targetRole = targetMembership.role;
-  // OWNER pode desativar qualquer um
   if (actorRole === "OWNER") return true;
-  // MANAGER pode desativar exceto OWNER
-  if (actorRole === "MANAGER") return targetRole !== "OWNER";
-  // LEADER e MEMBER não podem desativar
-  return false;
+  return ROLE_ORDER[actorRole] > ROLE_ORDER[targetRole];
 }
 
 /** Verifica se o ator pode remover um membro. */
 export function canRemoveMember(actorMembership: OrganizationMember, targetMembership: OrganizationMember): boolean {
   const actorRole = actorMembership.role;
   const targetRole = targetMembership.role;
-  // OWNER pode remover qualquer um
   if (actorRole === "OWNER") return true;
-  // MANAGER pode remover exceto OWNER
-  if (actorRole === "MANAGER") return targetRole !== "OWNER";
-  // LEADER e MEMBER não podem remover
-  return false;
+  return ROLE_ORDER[actorRole] > ROLE_ORDER[targetRole];
 }
 
 /** Verifica se pode remover o último OWNER (validated no servidor). */

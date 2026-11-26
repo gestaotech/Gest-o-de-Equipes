@@ -74,6 +74,14 @@ function createSmtpTransport(): Transporter | null {
  * 
  * @throws Error se o provedor SMTP estiver configurado mas falhar
  */
+export function isEmailConfigured(): boolean {
+  const config = getEmailConfig();
+  if (config.provider === 'console') return process.env.NODE_ENV !== 'production';
+  return config.provider === 'smtp' && Boolean(
+    config.smtp.host && config.smtp.user && config.smtp.password
+  );
+}
+
 export async function sendEmail(options: EmailOptions): Promise<void> {
   const config = getEmailConfig();
   
@@ -122,12 +130,10 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
     
     case 'none':
     default: {
-      console.warn(
-        '[EMAIL] Provedor de e-mail não configurado. ' +
-        'Token registrado em log apenas. Configure EMAIL_PROVIDER e SMTP_* ' +
-        'para habilitar envio real.'
+      // Não simular sucesso: fluxos como recuperação de senha dependem da entrega.
+      throw new Error(
+        'Envio de e-mail indisponível. Configure EMAIL_PROVIDER=smtp e as variáveis SMTP_HOST, SMTP_USER, SMTP_PASSWORD e SMTP_FROM.'
       );
-      break;
     }
   }
 }

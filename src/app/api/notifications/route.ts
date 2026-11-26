@@ -3,7 +3,7 @@ import { requireSessionApi } from "@/lib/auth";
 import { requireDataScope } from "@/server/scope";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const session = await requireSessionApi();
     const scope = await requireDataScope();

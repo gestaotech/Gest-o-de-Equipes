@@ -20,16 +20,21 @@ function getAllowedRoles(userRole: RoleName): { label: string; value: string }[]
       { label: "Membro", value: "MEMBER" },
     ];
   }
-  // MANAGER: pode qualquer exceto OWNER
-  if (userRole === "MANAGER") {
+  // ADMIN pode gerenciar gerentes, líderes e membros.
+  if (userRole === "ADMIN") {
     return [
-      { label: "Administrador", value: "ADMIN" },
       { label: "Gerente", value: "MANAGER" },
       { label: "Líder", value: "LEADER" },
       { label: "Membro", value: "MEMBER" },
     ];
   }
-  // LEADER e MEMBER: ninguêm
+  // MANAGER pode gerenciar apenas líderes e membros.
+  if (userRole === "MANAGER") {
+    return [
+      { label: "Líder", value: "LEADER" },
+      { label: "Membro", value: "MEMBER" },
+    ];
+  }
   return [];
 }
 

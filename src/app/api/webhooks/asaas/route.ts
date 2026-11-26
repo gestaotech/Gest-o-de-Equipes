@@ -7,6 +7,13 @@ import {
 import { applyAsaasWebhookEvent } from "@/server/asaas-webhook";
 
 export async function POST(request: Request) {
+  if (process.env.ASAAS_ENABLED !== "true") {
+    return NextResponse.json(
+      { error: "Integração Asaas temporariamente desativada." },
+      { status: 503 }
+    );
+  }
+
   const expectedToken = process.env.ASAAS_WEBHOOK_TOKEN ?? "";
   if (!expectedToken) {
     console.error("[webhook:asaas] ASAAS_WEBHOOK_TOKEN não configurado");
