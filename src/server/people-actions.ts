@@ -360,6 +360,25 @@ export async function updateCollaborator(input: { id: string } & Record<string, 
     if (data.managerId === target.id) {
       throw new AppError("INVALID", "O colaborador não pode ser o próprio gestor.", 400);
     }
+
+    // Impede ciclos na hierarquia de gestores (A -> B -> C -> A).
+    let managerCursor = data.managerId || null;
+    const visitedManagers = new Set<string>();
+    while (managerCursor) {
+      if (managerCursor === target.id) {
+        throw new AppError("INVALID", "Esta alteração criaria um ciclo na hierarquia de gestores.", 400);
+      }
+      if (visitedManagers.has(managerCursor)) {
+        throw new AppError("INVALID", "A hierarquia atual de gestores contém um ciclo.", 409);
+      }
+      visitedManagers.add(managerCursor);
+      const manager = await prisma.organizationMember.findFirst({
+        where: { id: managerCursor, organizationId: orgId },
+        select: { managerId: true },
+      });
+      managerCursor = manager?.managerId ?? null;
+    }
+
     await validateOrgReferences(orgId, {
       members: [data.managerId],
       departments: [data.departmentId],
