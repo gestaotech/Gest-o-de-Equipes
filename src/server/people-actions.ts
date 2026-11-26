@@ -351,11 +351,13 @@ export async function updateCollaborator(input: { id: string } & Record<string, 
     if (role !== target.role || target.id !== membership.id) guardCanAssign(membership, role);
 
     const email = normalizeEmail(data.email);
-    const duplicate = await prisma.user.findFirst({
-      where: { email, NOT: { id: target.userId } },
-      select: { id: true },
-    });
-    if (duplicate) throw new AppError("EMAIL_IN_USE", "Este e-mail já está em uso.", 409);
+    if (email !== normalizeEmail(target.user.email)) {
+      throw new AppError(
+        "EMAIL_CHANGE_REQUIRES_USER",
+        "O e-mail de acesso deve ser alterado pelo próprio usuário nas configurações do perfil.",
+        403
+      );
+    }
 
     if (data.managerId === target.id) {
       throw new AppError("INVALID", "O colaborador não pode ser o próprio gestor.", 400);
@@ -386,9 +388,11 @@ export async function updateCollaborator(input: { id: string } & Record<string, 
     });
 
     await prisma.$transaction(async (tx) => {
+      // E-mail é uma identidade global e não pode ser alterado por um administrador
+      // de apenas uma organização; somente o próprio usuário pode alterá-lo no perfil.
       await tx.user.update({
         where: { id: target.userId },
-        data: { name: data.name.trim(), email },
+        data: { name: data.name.trim() },
       });
       await tx.organizationMember.update({
         where: { id: target.id },
