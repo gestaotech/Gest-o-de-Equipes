@@ -171,7 +171,8 @@ export const collaboratorSchema = z.object({
   phone: z
     .string()
     .regex(/^[0-9+\-\s()]{8,20}$/, "Telefone inválido.")
-    .optional(),
+    .optional()
+    .nullable(),
 });
 
 export const projectSchema = z.object({
