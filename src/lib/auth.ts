@@ -56,22 +56,19 @@ export async function createSession(payload: SessionPayload, meta?: SessionMeta)
   const sid = randomUUID();
   const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000);
   const ua = parseUserAgent(meta?.userAgent);
-  await prisma.userSession
-    .create({
-      data: {
-        userId: payload.sub,
-        tokenHash: sessionTokenHash(sid),
-        ipAddress: meta?.ip ?? null,
-        userAgent: meta?.userAgent ?? null,
-        browser: ua.browser,
-        device: ua.device,
-        os: ua.os,
-        expiresAt,
-      },
-    })
-    .catch((err) => {
-      console.error("[session:create]", err);
-    });
+  // A sessão persistida é obrigatória: não emitir JWT se o registro falhar.
+  await prisma.userSession.create({
+    data: {
+      userId: payload.sub,
+      tokenHash: sessionTokenHash(sid),
+      ipAddress: meta?.ip ?? null,
+      userAgent: meta?.userAgent ?? null,
+      browser: ua.browser,
+      device: ua.device,
+      os: ua.os,
+      expiresAt,
+    },
+  });
 
   const token = await new SignJWT({
     email: payload.email,
@@ -165,7 +162,7 @@ export async function getSession(): Promise<SessionPayload | null> {
       const rec = await prisma.userSession.findUnique({
         where: { tokenHash: sessionTokenHash(payload.sid) },
       });
-      if (!rec || rec.revokedAt) return null;
+      if (!rec || rec.revokedAt || rec.expiresAt.getTime() <= Date.now()) return null;
       if (rec.lastActiveAt.getTime() < Date.now() - LAST_ACTIVE_THROTTLE_MS) {
         await prisma.userSession.updateMany({
           where: {
