@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 import { handleAction, AppError, ok } from "@/lib/errors";
 import { requireSessionApi } from "@/lib/auth";
 import { requireDataScope } from "@/server/scope";
-import { logActivity } from "@/server/activity";
 
 export async function getNotifications() {
   return handleAction(async () => {
