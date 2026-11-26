@@ -21,6 +21,14 @@ function appUrl() {
 
 export async function startPlanCheckout(input: { tier: string }) {
   return handleAction(async () => {
+    if (process.env.ASAAS_ENABLED !== "true") {
+      throw new AppError(
+        "BILLING_DISABLED",
+        "A contratação online está temporariamente desativada. Entre em contato com nossa equipe comercial pelo WhatsApp.",
+        503
+      );
+    }
+
     const session = await getSession();
     if (!session) throw new AppError("UNAUTHORIZED", "Entre na sua conta para continuar.", 401);
 
