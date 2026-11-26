@@ -1,20 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSessionApi } from "@/lib/auth";
 import { requireDataScope } from "@/server/scope";
+import { guardRole } from "@/server/guards";
 import { prisma } from "@/lib/prisma";
 import { AppError } from "@/lib/errors";
+import { RETENTION_ACTIONS, RETENTION_ENTITY_TYPES, MIN_RETENTION_DAYS } from "@/lib/retention";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
-
+    guardRole(scope.membership, "ADMIN");
     const policies = await prisma.retentionPolicy.findMany({
       where: { organizationId: scope.orgId },
       orderBy: { createdAt: "desc" },
     });
-
-    return NextResponse.json({ policies });
+    const response = NextResponse.json({ policies });
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro interno.";
     const statusCode = error instanceof AppError ? error.status : 500;
@@ -24,24 +25,40 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
+    guardRole(scope.membership, "ADMIN");
     const body: Record<string, unknown> = await request.json();
+
+    const entityType = typeof body.entityType === "string" ? body.entityType : "";
+    const action = typeof body.action === "string" ? body.action : "";
+    const retentionDays = body.retentionDays;
+    if (
+      !(RETENTION_ENTITY_TYPES as readonly string[]).includes(entityType) ||
+      !(RETENTION_ACTIONS as readonly string[]).includes(action) ||
+      typeof body.condition !== "string" || !body.condition.trim() ||
+      !Number.isInteger(retentionDays) || (retentionDays as number) < MIN_RETENTION_DAYS
+    ) {
+      return NextResponse.json({
+        error: `Informe um tipo de dado permitido, ação DELETE, condição e prazo mínimo de ${MIN_RETENTION_DAYS} dias.`,
+      }, { status: 400 });
+    }
 
     const policy = await prisma.retentionPolicy.create({
       data: {
         organizationId: scope.orgId,
-        entityType: body.entityType as string,
-        entityField: body.entityField as string | undefined,
-        condition: body.condition as string,
-        action: body.action as string,
-        retentionDays: body.retentionDays as number,
-        legalBasis: body.legalBasis as string | undefined,
+        entityType,
+        entityField: typeof body.entityField === "string" ? body.entityField : null,
+        condition: body.condition.trim(),
+        action,
+        retentionDays: retentionDays as number,
+        legalBasis: typeof body.legalBasis === "string" ? body.legalBasis : null,
         isActive: body.isActive === true,
       },
     });
 
-    return NextResponse.json({ policy }, { status: 201 });
+    const response = NextResponse.json({ policy }, { status: 201 });
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro interno.";
     const statusCode = error instanceof AppError ? error.status : 500;
