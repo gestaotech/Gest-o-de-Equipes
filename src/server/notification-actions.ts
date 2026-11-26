@@ -117,24 +117,3 @@ export async function getUnreadCount() {
     return ok({ unreadCount: count });
   });
 }
-
-/**
- * Função auxiliar para criar notificações (usada internamente por outras actions)
- */
-export async function createNotification(data: {
-  organizationId: string;
-  userId: string;
-  type: string;
-  title: string;
-  message?: string;
-}) {
-  return prisma.notification.create({
-    data: {
-      organizationId: data.organizationId,
-      userId: data.userId,
-      type: data.type,
-      title: data.title,
-      message: data.message,
-    },
-  });
-}
