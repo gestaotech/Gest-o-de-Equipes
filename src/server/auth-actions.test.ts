@@ -26,6 +26,7 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 vi.mock("@/lib/email", () => ({
+  isEmailConfigured: vi.fn().mockReturnValue(true),
   sendPasswordResetEmail: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -49,13 +50,24 @@ const mockedPrisma = prisma as unknown as {
   $transaction: Mock;
 };
 
-const { sendPasswordResetEmail } = await import("@/lib/email");
+const { isEmailConfigured, sendPasswordResetEmail } = await import("@/lib/email");
 
 const future = () => new Date(Date.now() + 60_000);
 
 describe("requestReset", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    (isEmailConfigured as Mock).mockReturnValue(true);
+  });
+
+  it("informa indisponibilidade sem consultar se o e-mail existe", async () => {
+    (isEmailConfigured as Mock).mockReturnValue(false);
+
+    const result = await requestReset({ email: "contato@example.com" });
+
+    expect(result.success).toBe(false);
+    expect((result as { error?: { message?: string } }).error?.message).toContain("temporariamente indisponível");
+    expect(mockedPrisma.user.findUnique).not.toHaveBeenCalled();
   });
 
   it("não vaza existência de e-mail inexistente", async () => {
