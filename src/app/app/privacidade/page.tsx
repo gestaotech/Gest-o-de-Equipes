@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Privacidade e Proteção de Dados" }
 
 export default async function PrivacidadePage() {
   const app = await getAppShellData();
-  const scope = await requireDataScope();
+  await requireDataScope();
 
   const canManage = permits(app.org.role, "audit.read") || permits(app.org.role, "settings.write");
 
