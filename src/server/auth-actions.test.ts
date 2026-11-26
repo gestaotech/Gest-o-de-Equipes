@@ -34,6 +34,11 @@ vi.mock("@/lib/auth", () => ({
   hashPassword: vi.fn().mockResolvedValue("hashed-password"),
 }));
 
+vi.mock("@/lib/db-rate-limit", () => ({
+  consumeAttempt: vi.fn().mockResolvedValue(undefined),
+  resetAttempts: vi.fn().mockResolvedValue(undefined),
+}));
+
 const mockedPrisma = prisma as unknown as {
   user: {
     findUnique: Mock;
