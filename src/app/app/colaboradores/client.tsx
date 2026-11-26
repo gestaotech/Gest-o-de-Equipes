@@ -258,32 +258,30 @@ export function TeammatesClient({
                   </TableCell>
                   <TableCell className="text-muted-foreground">{formatDate(m.entryDate)}</TableCell>
                   <TableCell>
-                    {(canWrite || canDelete) && (
-                      <Dropdown
-                        trigger={<Button variant="ghost" size="sm">•••</Button>}
-                        items={[
-                          ...(canWrite
-                            ? [
-                                {
+                    {(canWrite || canDelete) &&
+                      allowedRoles.some((option) => option.value === m.role) &&
+                      (canWrite || (canDelete && m.id !== selfMemberId)) && (
+                        <Dropdown
+                          trigger={<Button variant="ghost" size="sm">•••</Button>}
+                          items={[
+                            ...(canWrite
+                              ? [{
                                   label: "Editar",
                                   icon: <Pencil className="h-4 w-4" />,
                                   onClick: () => openEdit(m),
-                                },
-                              ]
-                            : []),
-                          ...(canDelete
-                            ? [
-                                {
+                                }]
+                              : []),
+                            ...(canDelete && m.id !== selfMemberId
+                              ? [{
                                   label: "Remover",
                                   icon: <Trash2 className="h-4 w-4" />,
                                   danger: true,
                                   onClick: () => setDeleting(m),
-                                },
-                              ]
-                            : []),
-                        ]}
-                      />
-                    )}
+                                }]
+                              : []),
+                          ]}
+                        />
+                      )}
                   </TableCell>
                 </TableRow>
               ))}
