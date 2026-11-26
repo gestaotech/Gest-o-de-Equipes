@@ -1,36 +1,49 @@
-# Checklist de deploy
+# Checklist de operação e deploy
 
-Branch atual: `fix/lgpd-security-and-compliance` (commits locais, sem push).
+## Situação verificada em 26/11/2026
 
-## 1. Antes do deploy
+- Produção atual: commit `76d4a05` (deploy Vercel `READY`).
+- Foi identificada falha de runtime no Prisma: `DATABASE_URL` inválida no ambiente de produção.
+- Banco Neon de produção: migrations listadas como concluídas; coluna CPF em texto puro ausente.
+- A migration `20261112140000_drop_plain_cpf` está aplicada.
+- A migration `20261122100000_organization_asaas_customer` está aplicada e agora está versionada no repositório.
+- O cadastro de usuários ainda precisa ser validado após corrigir a conexão do banco.
+- Asaas/checkout estão adiados; não configurar webhook nem reativar cobrança até nova decisão comercial.
 
-- [ ] **Segredos expostos:** a chave da Asaas e a senha do banco foram expostas no chat/arquivos locais. Rotacione-as no provedor e atualize os ambientes. Não reutilize valores expostos.
-- [ ] **Variáveis no Vercel:** conferir `docs/VARIAVEIS_AMBIENTE.md`. Obrigatórias para esta versão: `DATABASE_URL`, `AUTH_SECRET`, `ENCRYPTION_KEY`, `ENCRYPTION_HMAC_KEY`, `ASAAS_API_KEY`, `ASAAS_ENVIRONMENT=production`, `ASAAS_WEBHOOK_TOKEN`, `CRON_SECRET`, `NEXT_PUBLIC_APP_URL`, `PUBLIC_APP_URL`.
-- [ ] **Banco:** o banco de produção já está alinhado ao schema e com as migrations registradas, **exceto** `20261112140000_drop_plain_cpf` (pendente). Não aplique `drop_plain_cpf` antes do deploy do código que para de gravar `cpf`.
+## 1. Configurações obrigatórias para operação
 
-## 2. Publicar
+- [ ] Corrigir `DATABASE_URL` em Vercel → Settings → Environment Variables → Production. Copiar a connection string **pooled** da branch `production` no Neon; preservar o segredo e não o enviar por chat.
+- [ ] Configurar `CRON_SECRET` no Vercel. O cron diário `/api/cron/retention` está definido em `vercel.json` para 03:00 UTC e responde 503 sem essa variável.
+- [ ] Para recuperação de senha por e-mail, configurar `EMAIL_PROVIDER=smtp`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` e `SMTP_FROM`. Sem SMTP, o sistema informa indisponibilidade em vez de simular envio.
+- [ ] Confirmar `AUTH_SECRET`, `ENCRYPTION_KEY`, `ENCRYPTION_HMAC_KEY`, `NEXT_PUBLIC_APP_URL` e `PUBLIC_APP_URL` sem alterar chaves de criptografia sem plano de rotação.
 
-- [ ] Fazer push do branch e abrir/atualizar o deploy no Vercel.
-- [ ] Aguardar o deploy concluir com sucesso.
+## 2. Banco de dados
 
-## 3. Após o deploy
+- [x] `20261112140000_drop_plain_cpf` aplicada.
+- [x] `20261122100000_organization_asaas_customer` aplicada.
+- [ ] Após corrigir `DATABASE_URL`, executar `prisma migrate status` com conexão direta para confirmar que não há drift ou migration pendente.
+- [ ] Não excluir as seis organizações sem membros encontradas na base sem confirmar se são dados de teste ou dados que precisam ser recuperados.
 
-- [ ] **Migration `drop_plain_cpf`:** aplicar em produção (via conexão direta, preferencialmente). A migration aborta se houver CPF em texto puro sem versão criptografada.
-  - Exemplo: `npx prisma migrate deploy` (com `DATABASE_URL` apontando para produção) ou execução controlada do SQL da migration.
-  - Confirmar: `npx prisma migrate status` deve indicar banco em dia.
-- [ ] **Webhook Asaas:** cadastrar/atualizar para `https://<domínio>/api/webhooks/asaas` com o mesmo valor de `ASAAS_WEBHOOK_TOKEN` no header `asaas-access-token`. Testar um evento e conferir resposta 200.
-- [ ] **Cron de retenção:** confirmar que `CRON_SECRET` está configurado no Vercel e que o cron de `vercel.json` (`/api/cron/retention`, 03:00 UTC) aparece no projeto.
+## 3. Validação funcional obrigatória após corrigir o banco
 
-## 4. Validação pós-deploy
+- [ ] Criar uma conta nova, concluir criação da organização e validar login/logout.
+- [ ] Testar 2FA, códigos de backup e revogação de sessões.
+- [ ] Criar, editar, convidar e remover colaboradores com cada papel (OWNER, ADMIN, MANAGER, LEADER e MEMBER).
+- [ ] Testar equipes, departamentos, projetos, tarefas, metas, agenda, avisos e notificações.
+- [ ] Verificar persistência de cada operação após atualizar a página e entrar novamente.
+- [ ] Testar isolamento entre organizações e escopo por equipe.
+- [ ] Testar exportação, consentimento, políticas de privacidade, registros de tratamento, incidentes e retenção.
+- [ ] Validar os links de contratação via WhatsApp na página pública.
+- [ ] Não testar checkout Asaas até a integração ser reativada formalmente.
 
-- [ ] Login e navegação básicos.
-- [ ] Fluxo de login com 2FA (ativar em Perfil → Segurança, sair e entrar).
-- [ ] Criar/exportar solicitação LGPD e baixar exportação de dados.
-- [ ] Criar política de retenção suportada e verificar execução do cron (logs/resultado do endpoint).
-- [ ] Assinatura/checkout Asaas e recebimento de webhook (status da assinatura atualizado).
+## 4. CI e Vercel
+
+- O build agora executa ESLint e TypeScript; os erros não são mais ignorados.
+- O workflow GitHub Actions executa lint, typecheck, testes unitários e build.
+- O PR de auditoria deve permanecer aberto até CI e preview da versão final estarem aprovados e a variável de banco ser corrigida.
+- Não promover para produção antes de testar os fluxos autenticados com uma conta real.
 
 ## Observações
 
-- `ASAAS_ENVIRONMENT` tem padrão `sandbox`; em produção deve ser `production`.
-- O rate limiting do middleware é em memória por instância (não distribuído).
-- Não declare conformidade integral com a LGPD apenas com a implementação técnica; ver `docs/LGPD/PENDENCIAS_E_OPERACAO.md`.
+- O rate limiting do middleware é em memória por instância e não é distribuído entre todas as instâncias serverless.
+- A validação técnica não substitui revisão jurídica e operacional de LGPD; consulte `docs/LGPD/PENDENCIAS_E_OPERACAO.md`.
