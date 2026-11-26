@@ -208,11 +208,11 @@ export async function addCollaborator(input: unknown) {
     const email = normalizeEmail(data.email);
 
     // Verificação hierárquica: quem pode criar qual role
-    const role = (
-      data.permission && ["OWNER", "ADMIN", "MANAGER", "LEADER", "MEMBER"].includes(data.permission)
-        ? data.permission
-        : "MEMBER"
-    ) as "OWNER" | "ADMIN" | "MANAGER" | "LEADER" | "MEMBER";
+    const validRoles = ["OWNER", "ADMIN", "MANAGER", "LEADER", "MEMBER"] as const;
+    if (data.permission && !validRoles.includes(data.permission as (typeof validRoles)[number])) {
+      throw new AppError("INVALID_ROLE", "Cargo/permissão inválido.", 400);
+    }
+    const role = (data.permission || "MEMBER") as (typeof validRoles)[number];
 
     // Impede atribuir papel igual ou superior ao do ator.
     guardCanAssign(membership, role);
@@ -276,7 +276,7 @@ export async function addCollaborator(input: unknown) {
           organizationId: orgId,
           userId,
           role,
-          jobTitle: data.jobTitle || role || null,
+          jobTitle: data.jobTitle || null,
           cpfEncrypted,
           cpfHmacIndex,
           phone: data.phone || null,
@@ -338,11 +338,11 @@ export async function updateCollaborator(input: { id: string } & Record<string, 
     });
     if (!target) throw new AppError("NOT_FOUND", "Colaborador não encontrado.", 404);
 
-    const role = (
-      data.permission && ["OWNER", "ADMIN", "MANAGER", "LEADER", "MEMBER"].includes(data.permission)
-        ? data.permission
-        : target.role
-    ) as "OWNER" | "ADMIN" | "MANAGER" | "LEADER" | "MEMBER";
+    const validRoles = ["OWNER", "ADMIN", "MANAGER", "LEADER", "MEMBER"] as const;
+    if (data.permission && !validRoles.includes(data.permission as (typeof validRoles)[number])) {
+      throw new AppError("INVALID_ROLE", "Cargo/permissão inválido.", 400);
+    }
+    const role = (data.permission || target.role) as (typeof validRoles)[number];
 
     if (target.id === membership.id && role !== target.role) {
       throw new AppError("FORBIDDEN", "Você não pode alterar o próprio nível de acesso.", 403);
