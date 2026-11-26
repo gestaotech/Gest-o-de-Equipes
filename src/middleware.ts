@@ -12,7 +12,6 @@ const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX_LOGIN = 5;
 const RATE_LIMIT_MAX_RESET = 3;
-const RATE_LIMIT_MAX_2FA = 10;
 const RATE_LIMIT_MAX_GENERAL = 30;
 
 const ENDPOINT_LIMITS: Record<string, { max: number; windowMs: number }> = {
