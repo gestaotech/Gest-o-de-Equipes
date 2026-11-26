@@ -327,7 +327,6 @@ export async function exportUserData(userId: string) {
  */
 export async function anonymizeUserData(userId: string) {
   return handleAction(async () => {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
 
     // Apenas OWNER e ADMIN podem anonimizar dados de terceiros.
