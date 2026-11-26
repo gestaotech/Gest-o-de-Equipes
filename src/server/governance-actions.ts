@@ -269,10 +269,10 @@ export async function grantConsent(input: unknown) {
     const userAgent = requestHeaders.get("user-agent") || null;
 
     const consent = await prisma.consent.upsert({
-      where: { userId_policyId: { userId: scope.session.sub, policyId: data.policyId } },
+      where: { userId_policyId: { userId: scope.scope.session.sub, policyId: data.policyId } },
       create: {
         organizationId: scope.orgId,
-        userId: session.sub,
+        userId: scope.session.sub,
         policyId: data.policyId,
         version: policy.version,
         ipAddress,
@@ -303,7 +303,7 @@ export async function revokeConsent(policyId: string) {
     const scope = await requireDataScope();
 
     const consent = await prisma.consent.findFirst({
-      where: { userId: session.sub, policyId, organizationId: scope.orgId },
+      where: { userId: scope.session.sub, policyId, organizationId: scope.orgId },
     });
     if (!consent) {
       throw new AppError("NOT_FOUND", "Consentimento não encontrado.", 404);
@@ -330,7 +330,7 @@ export async function listConsents() {
     const scope = await requireDataScope();
 
     const consents = await prisma.consent.findMany({
-      where: { userId: session.sub, organizationId: scope.orgId },
+      where: { userId: scope.session.sub, organizationId: scope.orgId },
       include: { policy: { select: { id: true, title: true, version: true } } },
       orderBy: { grantedAt: "desc" },
     });
@@ -455,7 +455,7 @@ export async function createSecurityIncident(input: unknown) {
         organizationsAffected: data.organizationsAffected,
         containmentMeasures: data.containmentMeasures,
         responsePlan: data.responsePlan,
-        responsibleId: data.responsibleId || session.sub,
+        responsibleId,
         evidenceUrl: data.evidenceUrl,
       },
       include: {
@@ -525,7 +525,6 @@ export async function updateSecurityIncident(input: { id: string } & Record<stri
 
 export async function resolveSecurityIncident(incidentId: string) {
   return handleAction(async () => {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
     guardPerm(scope.membership, "settings.write");
 
