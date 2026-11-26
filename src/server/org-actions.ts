@@ -173,7 +173,7 @@ export async function switchOrganization(orgId: string) {
   return handleAction(async () => {
     const session = await requireSessionApi();
     const membership = await prisma.organizationMember.findFirst({
-      where: { userId: session.sub, organizationId: orgId },
+      where: { userId: session.sub, organizationId: orgId, status: "ATIVO" },
     });
     if (!membership) {
       throw new AppError("FORBIDDEN", "Você não pertence a esta organização.", 403);
