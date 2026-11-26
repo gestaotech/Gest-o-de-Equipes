@@ -309,7 +309,8 @@ export function TeammatesClient({
           </div>
             <div className="sm:col-span-2">
               <Label>E-mail *</Label>
-              <Input required value={dialog?.form.email} onChange={(e) => set({ email: e.target.value })} placeholder="voce@empresa.com" />
+              <Input required disabled={dialog?.mode === "edit"} value={dialog?.form.email} onChange={(e) => set({ email: e.target.value })} placeholder="voce@empresa.com" />
+              {dialog?.mode === "edit" && <p className="mt-1 text-xs text-muted-foreground">O e-mail de acesso é global e só pode ser alterado pelo próprio usuário no perfil.</p>}
             </div>
           <div>
             <Label>Cargo</Label>
