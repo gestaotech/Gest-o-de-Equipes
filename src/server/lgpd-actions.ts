@@ -276,6 +276,8 @@ export async function exportUserData(userId: string) {
         goalMembers: { select: { id: true, goalId: true } },
       },
     });
+    // Não exportar os campos internos usados para criptografia e busca de CPF.
+    const { cpfEncrypted, cpfHmacIndex, ...safeMemberDetail } = memberDetail || {};
 
     const sessions = await prisma.userSession.findMany({
       where: { userId },
@@ -301,7 +303,7 @@ export async function exportUserData(userId: string) {
       exportedAt: new Date().toISOString(),
       organizationId: scope.orgId,
       user,
-      membership: memberDetail,
+      membership: safeMemberDetail,
       sessions,
       notifications,
       comments,
