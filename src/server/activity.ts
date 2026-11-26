@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { headers } from "next/headers";
 import { requireSessionApi, getActiveOrg } from "@/lib/auth";
-import { sanitizeAuditData, containsSensitiveData, safeAuditData } from "@/lib/audit-sanitizer";
+import { sanitizeAuditData, containsSensitiveData } from "@/lib/audit-sanitizer";
 
 /**
  * Extrai metadados da requisição (IP e user-agent) de forma segura.
