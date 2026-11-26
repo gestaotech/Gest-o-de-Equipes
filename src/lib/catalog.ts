@@ -203,6 +203,8 @@ export async function ensureCatalogs(): Promise<void> {
     // contact/note são metadados de apresentação e não pertencem ao modelo Plan.
     // Nunca encaminhá-los ao Prisma para evitar campos desconhecidos.
     const { contact: _contact, note: _note, ...planData } = p;
+    void _contact;
+    void _note;
     await prisma.plan.upsert({
       where: { tier: planData.tier },
       update: {
