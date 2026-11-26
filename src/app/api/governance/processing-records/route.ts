@@ -33,6 +33,21 @@ export async function POST(request: NextRequest) {
     if (requiredText.some((key) => typeof body[key] !== "string" || !(body[key] as string).trim())) {
       return NextResponse.json({ error: "Preencha os campos obrigatórios do registro." }, { status: 400 });
     }
+    const legalBases = ["CONSENT", "LEGAL_OBLIGATION", "PUBLIC_POLICY", "CONTRACT", "LEGITIMATE_INTEREST", "VITAL_INTEREST", "LEGAL_EXERCISE", "OTHER"];
+    const sharingTypes = ["NONE", "THIRD_PARTY_PROCESSOR", "CONTROLLER", "AUTHORITY", "OTHER"];
+    const dataCategories = ["IDENTIFICATION", "CONTACT", "EMPLOYMENT", "AUTHENTICATION", "DEVICE", "BEHAVIORAL", "FINANCIAL", "HEALTH", "BIOMETRIC", "OTHER"];
+    const subjectCategories = ["EMPLOYEE", "MEMBER", "CUSTOMER", "PARTNER", "OTHER"];
+    const validArray = (value: unknown, allowed: string[]) =>
+      value === undefined || (Array.isArray(value) && value.every((item) => typeof item === "string" && allowed.includes(item)));
+    if (
+      !legalBases.includes(body.legalBasis as string) ||
+      !sharingTypes.includes(body.sharing as string) ||
+      !validArray(body.dataCategory, dataCategories) ||
+      !validArray(body.subjectCategory, dataCategories) ||
+      !validArray(body.dataSubjects, subjectCategories)
+    ) {
+      return NextResponse.json({ error: "Há categorias ou bases legais inválidas no registro." }, { status: 400 });
+    }
     const record = await prisma.processingRecord.create({
       data: {
         organizationId: scope.orgId,
