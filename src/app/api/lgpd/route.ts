@@ -1,22 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSessionApi } from "@/lib/auth";
-import { requireDataScope } from "@/server/scope";
 import { AppError } from "@/lib/errors";
 import {
   createLGPDRequest,
   listLGPDRequests,
   updateLGPDRequestStatus,
-  getLGPDRequest,
   exportUserData,
-  anonymizeUserData,
   deleteUserData,
 } from "@/server/lgpd-actions";
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await requireSessionApi();
-    const scope = await requireDataScope();
-
     const { searchParams } = new URL(request.url);
     const action = searchParams.get("action");
 
@@ -57,8 +50,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await requireSessionApi();
-    const scope = await requireDataScope();
     const body: Record<string, unknown> = await request.json();
 
     const result = await createLGPDRequest({
@@ -78,8 +69,6 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const session = await requireSessionApi();
-    const scope = await requireDataScope();
     const body = await request.json();
     const { requestId, status, rejectionReason, comment } = body;
 
@@ -107,8 +96,6 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await requireSessionApi();
-    const scope = await requireDataScope();
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
 
