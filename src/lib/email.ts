@@ -76,7 +76,7 @@ function createSmtpTransport(): Transporter | null {
  */
 export function isEmailConfigured(): boolean {
   const config = getEmailConfig();
-  if (config.provider === 'console') return true;
+  if (config.provider === 'console') return process.env.NODE_ENV !== 'production';
   return config.provider === 'smtp' && Boolean(
     config.smtp.host && config.smtp.user && config.smtp.password
   );
