@@ -15,6 +15,7 @@
 - [ ] Corrigir `DATABASE_URL` em Vercel → Settings → Environment Variables → Production. Copiar a connection string **pooled** da branch `production` no Neon; preservar o segredo e não o enviar por chat.
 - [ ] Configurar `CRON_SECRET` no Vercel. O cron diário `/api/cron/retention` está definido em `vercel.json` para 03:00 UTC e responde 503 sem essa variável.
 - [ ] Para recuperação de senha por e-mail, configurar `EMAIL_PROVIDER=smtp`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` e `SMTP_FROM`. Sem SMTP, o sistema informa indisponibilidade em vez de simular envio.
+- [ ] Para previews funcionais, configurar `DATABASE_URL` apontando para uma branch Neon exclusiva de preview e `AUTH_SECRET` próprio. Nunca usar a base de produção nos previews; atualmente essas duas variáveis não estão configuradas no target Preview.
 - [ ] Confirmar `AUTH_SECRET`, `ENCRYPTION_KEY`, `ENCRYPTION_HMAC_KEY`, `NEXT_PUBLIC_APP_URL` e `PUBLIC_APP_URL` sem alterar chaves de criptografia sem plano de rotação.
 
 ## 2. Banco de dados
