@@ -20,6 +20,8 @@ Guia das variáveis usadas pelo TeamFlow. Valores reais devem ficar só no `.env
 
 ## Billing (Asaas) — adiado
 
+`ASAAS_ENABLED` deve permanecer `false` enquanto a contratação for feita via WhatsApp. O checkout `/contratar` redireciona para a página pública, a action de checkout retorna indisponibilidade e o webhook responde 503. Só defina `ASAAS_ENABLED=true` quando o fluxo for revalidado e reativado.
+
 | Variável | Descrição |
 |---|---|
 | `ASAAS_API_KEY` | Chave da API Asaas. Integração adiada; não habilitar até revisão e reimplementação do fluxo de cobrança. |
