@@ -11,7 +11,9 @@ export async function GET() {
       include: { policy: { select: { id: true, title: true, version: true } } },
       orderBy: { grantedAt: "desc" },
     });
-    return NextResponse.json({ consents, headers: { "Cache-Control": "private, no-store" } });
+    const response = NextResponse.json({ consents });
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro interno.";
     const statusCode = error instanceof AppError ? error.status : 500;
