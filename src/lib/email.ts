@@ -74,6 +74,14 @@ function createSmtpTransport(): Transporter | null {
  * 
  * @throws Error se o provedor SMTP estiver configurado mas falhar
  */
+export function isEmailConfigured(): boolean {
+  const config = getEmailConfig();
+  if (config.provider === 'console') return true;
+  return config.provider === 'smtp' && Boolean(
+    config.smtp.host && config.smtp.user && config.smtp.password
+  );
+}
+
 export async function sendEmail(options: EmailOptions): Promise<void> {
   const config = getEmailConfig();
   
