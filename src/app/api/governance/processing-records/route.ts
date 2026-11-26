@@ -29,8 +29,11 @@ export async function POST(request: NextRequest) {
     guardRole(scope.membership, "ADMIN");
     const body: Record<string, unknown> = await request.json();
 
-    const requiredText = ["name", "purpose", "legalBasis", "sharing"] as const;
-    if (requiredText.some((key) => typeof body[key] !== "string" || !(body[key] as string).trim())) {
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    const purpose = typeof body.purpose === "string" ? body.purpose.trim() : "";
+    const legalBasis = typeof body.legalBasis === "string" ? body.legalBasis : "";
+    const sharing = typeof body.sharing === "string" ? body.sharing : "";
+    if (!name || !purpose || !legalBasis || !sharing) {
       return NextResponse.json({ error: "Preencha os campos obrigatórios do registro." }, { status: 400 });
     }
     const legalBases = ["CONSENT", "LEGAL_OBLIGATION", "PUBLIC_POLICY", "CONTRACT", "LEGITIMATE_INTEREST", "VITAL_INTEREST", "LEGAL_EXERCISE", "OTHER"];
@@ -40,8 +43,8 @@ export async function POST(request: NextRequest) {
     const validArray = (value: unknown, allowed: string[]) =>
       value === undefined || (Array.isArray(value) && value.every((item) => typeof item === "string" && allowed.includes(item)));
     if (
-      !legalBases.includes(body.legalBasis as string) ||
-      !sharingTypes.includes(body.sharing as string) ||
+      !legalBases.includes(legalBasis) ||
+      !sharingTypes.includes(sharing) ||
       !validArray(body.dataCategory, dataCategories) ||
       !validArray(body.subjectCategory, dataCategories) ||
       !validArray(body.dataSubjects, subjectCategories)
@@ -51,14 +54,14 @@ export async function POST(request: NextRequest) {
     const record = await prisma.processingRecord.create({
       data: {
         organizationId: scope.orgId,
-        name: (body.name as string).trim(),
+        name,
         description: typeof body.description === "string" ? body.description : null,
-        purpose: (body.purpose as string).trim(),
-        legalBasis: body.legalBasis as "CONSENT" | "LEGAL_OBLIGATION" | "PUBLIC_POLICY" | "CONTRACT" | "LEGITIMATE_INTEREST" | "VITAL_INTEREST" | "LEGAL_EXERCISE" | "OTHER",
+        purpose,
+        legalBasis: legalBasis as "CONSENT" | "LEGAL_OBLIGATION" | "PUBLIC_POLICY" | "CONTRACT" | "LEGITIMATE_INTEREST" | "VITAL_INTEREST" | "LEGAL_EXERCISE" | "OTHER",
         dataCategory: ((body.dataCategory as string[] | undefined) ?? []) as DataCategory[],
         subjectCategory: ((body.subjectCategory as string[] | undefined) ?? []) as DataCategory[],
         dataSubjects: ((body.dataSubjects as string[] | undefined) ?? []) as DataSubjectCategory[],
-        sharing: body.sharing as "NONE" | "THIRD_PARTY_PROCESSOR" | "CONTROLLER" | "AUTHORITY" | "OTHER",
+        sharing: sharing as "NONE" | "THIRD_PARTY_PROCESSOR" | "CONTROLLER" | "AUTHORITY" | "OTHER",
         sharedWith: typeof body.sharedWith === "string" ? body.sharedWith : null,
         retentionPeriod: typeof body.retentionPeriod === "string" ? body.retentionPeriod : null,
         securityMeasures: typeof body.securityMeasures === "string" ? body.securityMeasures : null,
