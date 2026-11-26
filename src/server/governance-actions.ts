@@ -269,7 +269,7 @@ export async function grantConsent(input: unknown) {
     const userAgent = requestHeaders.get("user-agent") || null;
 
     const consent = await prisma.consent.upsert({
-      where: { userId_policyId: { userId: scope.scope.session.sub, policyId: data.policyId } },
+      where: { userId_policyId: { userId: scope.session.sub, policyId: data.policyId } },
       create: {
         organizationId: scope.orgId,
         userId: scope.session.sub,
