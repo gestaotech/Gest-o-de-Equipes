@@ -1,21 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSessionApi } from "@/lib/auth";
 import { requireDataScope } from "@/server/scope";
+import { guardRole } from "@/server/guards";
 import { prisma } from "@/lib/prisma";
 import { DataCategory, DataSubjectCategory } from "@prisma/client";
 import { AppError } from "@/lib/errors";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
-
+    guardRole(scope.membership, "ADMIN");
     const records = await prisma.processingRecord.findMany({
       where: { organizationId: scope.orgId },
       orderBy: { createdAt: "desc" },
     });
-
-    return NextResponse.json({ records });
+    const response = NextResponse.json({ records });
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro interno.";
     const statusCode = error instanceof AppError ? error.status : 500;
@@ -25,29 +25,35 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
+    guardRole(scope.membership, "ADMIN");
     const body: Record<string, unknown> = await request.json();
 
+    const requiredText = ["name", "purpose", "legalBasis", "sharing"] as const;
+    if (requiredText.some((key) => typeof body[key] !== "string" || !(body[key] as string).trim())) {
+      return NextResponse.json({ error: "Preencha os campos obrigatórios do registro." }, { status: 400 });
+    }
     const record = await prisma.processingRecord.create({
       data: {
         organizationId: scope.orgId,
-        name: body.name as string,
-        description: body.description as string | undefined,
-        purpose: body.purpose as string,
+        name: (body.name as string).trim(),
+        description: typeof body.description === "string" ? body.description : null,
+        purpose: (body.purpose as string).trim(),
         legalBasis: body.legalBasis as "CONSENT" | "LEGAL_OBLIGATION" | "PUBLIC_POLICY" | "CONTRACT" | "LEGITIMATE_INTEREST" | "VITAL_INTEREST" | "LEGAL_EXERCISE" | "OTHER",
         dataCategory: ((body.dataCategory as string[] | undefined) ?? []) as DataCategory[],
         subjectCategory: ((body.subjectCategory as string[] | undefined) ?? []) as DataCategory[],
-        dataSubjects: (body.dataSubjects as unknown) as DataSubjectCategory[] | undefined,
+        dataSubjects: ((body.dataSubjects as string[] | undefined) ?? []) as DataSubjectCategory[],
         sharing: body.sharing as "NONE" | "THIRD_PARTY_PROCESSOR" | "CONTROLLER" | "AUTHORITY" | "OTHER",
-        sharedWith: body.sharedWith as string | undefined,
-        retentionPeriod: body.retentionPeriod as string | undefined,
-        securityMeasures: body.securityMeasures as string | undefined,
-        dpoResponsible: body.dpoResponsible as string | undefined,
+        sharedWith: typeof body.sharedWith === "string" ? body.sharedWith : null,
+        retentionPeriod: typeof body.retentionPeriod === "string" ? body.retentionPeriod : null,
+        securityMeasures: typeof body.securityMeasures === "string" ? body.securityMeasures : null,
+        dpoResponsible: typeof body.dpoResponsible === "string" ? body.dpoResponsible : null,
       },
     });
 
-    return NextResponse.json({ record }, { status: 201 });
+    const response = NextResponse.json({ record }, { status: 201 });
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro interno.";
     const statusCode = error instanceof AppError ? error.status : 500;
