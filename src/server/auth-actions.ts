@@ -52,6 +52,8 @@ export async function register(input: unknown) {
   return handleAction(async () => {
     const data = signUpSchema.parse(input);
     const email = normalizeEmail(data.email);
+    const meta = await sessionMeta();
+    await consumeAttempt(`register:${meta.ip ?? "unknown"}`, 5, 60 * 60 * 1000);
 
     // Prepare global roles, permissions and plans before creating the account.
     // If catalog initialization fails, do not leave an unusable user behind.
@@ -77,12 +79,17 @@ export async function login(input: unknown) {
   return handleAction(async () => {
     const data = loginSchema.parse(input);
     const email = normalizeEmail(data.email);
+    const meta = await sessionMeta();
+    const attemptKey = `login:${email}:${meta.ip ?? "unknown"}`;
+    await consumeAttempt(attemptKey, 8, 15 * 60 * 1000);
+
     const user = await prisma.user.findUnique({ where: { email } });
     const valid =
       user && (await verifyPassword(data.password, user.passwordHash));
     if (!user || !valid) {
       throw new AppError("INVALID_CREDENTIALS", "E-mail ou senha incorretos.", 401);
     }
+    await resetAttempts(attemptKey);
 
     // Verificar se o usuário tem 2FA ativado
     const tfa = await prisma.userTwoFactor.findUnique({
@@ -236,6 +243,8 @@ export async function requestReset(input: unknown) {
   return handleAction(async () => {
     const data = forgotSchema.parse(input);
     const email = normalizeEmail(data.email);
+    const meta = await sessionMeta();
+    await consumeAttempt(`password-reset:${email}:${meta.ip ?? "unknown"}`, 3, 15 * 60 * 1000);
 
     // Falha de forma uniforme antes de consultar a conta, sem permitir enumeração.
     if (!isEmailConfigured()) {
