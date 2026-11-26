@@ -27,19 +27,22 @@ export async function POST(request: NextRequest) {
     guardRole(scope.membership, "ADMIN");
     const body: Record<string, unknown> = await request.json();
 
-    if (
-      typeof body.title !== "string" || body.title.trim().length < 2 ||
-      typeof body.version !== "string" || !body.version.trim() ||
-      typeof body.content !== "string" || !body.content.trim() ||
-      typeof body.effectiveFrom !== "string"
-    ) {
+    const title = typeof body.title === "string" ? body.title.trim() : "";
+    const version = typeof body.version === "string" ? body.version.trim() : "";
+    const content = typeof body.content === "string" ? body.content : "";
+    const effectiveFromValue = typeof body.effectiveFrom === "string" ? body.effectiveFrom : "";
+    if (title.length < 2 || !version || !content.trim() || !effectiveFromValue) {
       return NextResponse.json({ error: "Preencha título, versão, conteúdo e data de vigência." }, { status: 400 });
     }
-    const effectiveFrom = new Date(body.effectiveFrom);
+    const effectiveFrom = new Date(effectiveFromValue);
     const effectiveTo = typeof body.effectiveTo === "string" && body.effectiveTo
       ? new Date(body.effectiveTo)
       : null;
-    if (Number.isNaN(effectiveFrom.getTime()) || (effectiveTo && Number.isNaN(effectiveTo.getTime()))) {
+    if (
+      Number.isNaN(effectiveFrom.getTime()) ||
+      (effectiveTo && Number.isNaN(effectiveTo.getTime())) ||
+      (effectiveTo && effectiveTo < effectiveFrom)
+    ) {
       return NextResponse.json({ error: "Data de vigência inválida." }, { status: 400 });
     }
 
@@ -53,9 +56,9 @@ export async function POST(request: NextRequest) {
       return tx.privacyPolicy.create({
         data: {
           organizationId: scope.orgId,
-          title: body.title.trim(),
-          version: body.version.trim(),
-          content: body.content,
+          title,
+          version,
+          content,
           effectiveFrom,
           effectiveTo,
           isActive: body.isActive === true,
