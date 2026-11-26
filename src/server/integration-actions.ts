@@ -2,8 +2,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { handleAction, AppError, ok } from "@/lib/errors";
-import { requireSessionApi } from "@/lib/auth";
 import { requireDataScope } from "@/server/scope";
+import { guardPerm, guardRole } from "@/server/guards";
 import { logActivity } from "@/server/activity";
 import z from "zod";
 
@@ -15,8 +15,9 @@ const integrationSchema = z.object({
 
 export async function listIntegrations() {
   return handleAction(async () => {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
+    // A configuração pode conter tokens e chaves de terceiros.
+    guardRole(scope.membership, "ADMIN");
 
     const integrations = await prisma.integration.findMany({
       where: { organizationId: scope.orgId },
@@ -32,16 +33,14 @@ export async function listIntegrations() {
 
 export async function createIntegration(input: unknown) {
   return handleAction(async () => {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
+    guardPerm(scope.membership, "integrations.write");
     const data = integrationSchema.parse(input);
 
     const exists = await prisma.integration.findUnique({
       where: { organizationId_provider: { organizationId: scope.orgId, provider: data.provider } },
     });
-    if (exists) {
-      throw new AppError("EXISTS", "Integração já existe para este provedor.", 409);
-    }
+    if (exists) throw new AppError("EXISTS", "Integração já existe para este provedor.", 409);
 
     const integration = await prisma.integration.create({
       data: {
@@ -49,7 +48,7 @@ export async function createIntegration(input: unknown) {
         provider: data.provider,
         config: data.config,
         enabled: data.enabled,
-        createdById: session.sub,
+        createdById: scope.session.sub,
       },
       include: {
         createdBy: { select: { user: { select: { name: true } } } },
@@ -62,30 +61,24 @@ export async function createIntegration(input: unknown) {
       entityId: integration.id,
       newData: { provider: data.provider, enabled: data.enabled },
     });
-
     return ok({ integration });
   });
 }
 
 export async function updateIntegration(input: { id: string } & Record<string, unknown>) {
   return handleAction(async () => {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
+    guardPerm(scope.membership, "integrations.write");
     const data = integrationSchema.parse(input);
 
     const integration = await prisma.integration.findFirst({
       where: { id: input.id, organizationId: scope.orgId },
     });
-    if (!integration) {
-      throw new AppError("NOT_FOUND", "Integração não encontrada.", 404);
-    }
+    if (!integration) throw new AppError("NOT_FOUND", "Integração não encontrada.", 404);
 
     const updated = await prisma.integration.update({
       where: { id: input.id },
-      data: {
-        config: data.config,
-        enabled: data.enabled,
-      },
+      data: { config: data.config, enabled: data.enabled },
       include: {
         createdBy: { select: { user: { select: { name: true } } } },
       },
@@ -97,61 +90,52 @@ export async function updateIntegration(input: { id: string } & Record<string, u
       entityId: input.id,
       newData: { provider: integration.provider, enabled: data.enabled },
     });
-
     return ok({ integration: updated });
   });
 }
 
 export async function deleteIntegration(id: string) {
   return handleAction(async () => {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
+    guardPerm(scope.membership, "integrations.write");
 
     const integration = await prisma.integration.findFirst({
       where: { id, organizationId: scope.orgId },
     });
-    if (!integration) {
-      throw new AppError("NOT_FOUND", "Integração não encontrada.", 404);
-    }
+    if (!integration) throw new AppError("NOT_FOUND", "Integração não encontrada.", 404);
 
     await prisma.integration.delete({ where: { id } });
-
     await logActivity({
       action: "integration.deleted",
       entity: "integration",
       entityId: id,
       newData: { provider: integration.provider },
     });
-
     return ok({});
   });
 }
 
 export async function toggleIntegration(id: string) {
   return handleAction(async () => {
-    const session = await requireSessionApi();
     const scope = await requireDataScope();
+    guardPerm(scope.membership, "integrations.write");
 
     const integration = await prisma.integration.findFirst({
       where: { id, organizationId: scope.orgId },
       select: { id: true, provider: true, enabled: true },
     });
-    if (!integration) {
-      throw new AppError("NOT_FOUND", "Integração não encontrada.", 404);
-    }
+    if (!integration) throw new AppError("NOT_FOUND", "Integração não encontrada.", 404);
 
     const updated = await prisma.integration.update({
       where: { id },
       data: { enabled: !integration.enabled },
     });
-
     await logActivity({
       action: "integration.toggled",
       entity: "integration",
       entityId: id,
       newData: { provider: integration.provider, enabled: !integration.enabled },
     });
-
     return ok({ integration: updated });
   });
 }
