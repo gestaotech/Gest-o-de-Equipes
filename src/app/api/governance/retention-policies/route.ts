@@ -31,11 +31,12 @@ export async function POST(request: NextRequest) {
 
     const entityType = typeof body.entityType === "string" ? body.entityType : "";
     const action = typeof body.action === "string" ? body.action : "";
+    const condition = typeof body.condition === "string" ? body.condition.trim() : "";
     const retentionDays = body.retentionDays;
     if (
       !(RETENTION_ENTITY_TYPES as readonly string[]).includes(entityType) ||
       !(RETENTION_ACTIONS as readonly string[]).includes(action) ||
-      typeof body.condition !== "string" || !body.condition.trim() ||
+      !condition ||
       !Number.isInteger(retentionDays) || (retentionDays as number) < MIN_RETENTION_DAYS
     ) {
       return NextResponse.json({
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
         organizationId: scope.orgId,
         entityType,
         entityField: typeof body.entityField === "string" ? body.entityField : null,
-        condition: body.condition.trim(),
+        condition,
         action,
         retentionDays: retentionDays as number,
         legalBasis: typeof body.legalBasis === "string" ? body.legalBasis : null,
