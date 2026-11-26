@@ -14,9 +14,6 @@ import {
   guardCanAssign,
   validateOrgReferences,
   canCreateMember,
-  canChangeMemberRole,
-  guardLastOwnerProtection,
-  guardManagerCannotPromoteToOwner,
 } from "@/server/guards";
 import { logActivity } from "@/server/activity";
 import { hashPassword } from "@/lib/auth";
@@ -217,10 +214,8 @@ export async function addCollaborator(input: unknown) {
         : "MEMBER"
     ) as "OWNER" | "ADMIN" | "MANAGER" | "LEADER" | "MEMBER";
 
-    // MANAGER não pode criar/promover OWNER (canCreateMember cobre os demais casos)
-    if (role === "OWNER") {
-      guardManagerCannotPromoteToOwner(membership);
-    }
+    // Impede atribuir papel igual ou superior ao do ator.
+    guardCanAssign(membership, role);
 
     // Verifica se o ator pode criar um membro com este role
     if (!canCreateMember(membership, role)) {
@@ -233,12 +228,6 @@ export async function addCollaborator(input: unknown) {
       departments: [data.departmentId],
       teams: [data.teamId],
     });
-
-    // Contagem de OWNERs para proteção do último
-    const ownersCount = await prisma.organizationMember.count({
-      where: { organizationId: orgId, role: "OWNER" },
-    });
-    guardLastOwnerProtection(membership, { owners: ownersCount });
 
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
@@ -322,13 +311,126 @@ export async function addCollaborator(input: unknown) {
       },
     });
 
-    // Em produção o link NUNCA é devolvido (não há SMTP configurado).
-    // A entrega do token por e-mail fica como dependência pendente.
-    const safeReturn = process.env.NODE_ENV !== "production";
+    // O link de primeiro acesso é retornado somente ao administrador que criou
+    // o convite. É de uso único e expira; assim o fluxo funciona mesmo sem SMTP.
     return {
       id: member.id,
       createdUser,
-      firstAccessUrl: safeReturn && rawToken ? `/primeiro-acesso?t=${rawToken}` : null,
+      firstAccessUrl: rawToken ? `/primeiro-acesso?t=${rawToken}` : null,
     };
+  });
+}
+
+
+export async function updateCollaborator(input: { id: string } & Record<string, unknown>) {
+  return handleAction(async () => {
+    const { orgId, membership } = await getContext();
+    guardPerm(membership, "users.write");
+
+    if (!input?.id || typeof input.id !== "string") {
+      throw new AppError("INVALID", "Colaborador inválido.", 400);
+    }
+
+    const data = collaboratorSchema.parse(input);
+    const target = await prisma.organizationMember.findFirst({
+      where: { id: input.id, organizationId: orgId },
+      include: { user: { select: { id: true, name: true, email: true } } },
+    });
+    if (!target) throw new AppError("NOT_FOUND", "Colaborador não encontrado.", 404);
+
+    const role = (
+      data.permission && ["OWNER", "ADMIN", "MANAGER", "LEADER", "MEMBER"].includes(data.permission)
+        ? data.permission
+        : target.role
+    ) as "OWNER" | "ADMIN" | "MANAGER" | "LEADER" | "MEMBER";
+
+    if (target.id === membership.id && role !== target.role) {
+      throw new AppError("FORBIDDEN", "Você não pode alterar o próprio nível de acesso.", 403);
+    }
+    if (target.id !== membership.id) guardCanAssign(membership, target.role);
+    if (role !== target.role || target.id !== membership.id) guardCanAssign(membership, role);
+
+    const email = normalizeEmail(data.email);
+    const duplicate = await prisma.user.findFirst({
+      where: { email, NOT: { id: target.userId } },
+      select: { id: true },
+    });
+    if (duplicate) throw new AppError("EMAIL_IN_USE", "Este e-mail já está em uso.", 409);
+
+    if (data.managerId === target.id) {
+      throw new AppError("INVALID", "O colaborador não pode ser o próprio gestor.", 400);
+    }
+    await validateOrgReferences(orgId, {
+      members: [data.managerId],
+      departments: [data.departmentId],
+      teams: [data.teamId],
+    });
+
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: target.userId },
+        data: { name: data.name.trim(), email },
+      });
+      await tx.organizationMember.update({
+        where: { id: target.id },
+        data: {
+          role,
+          jobTitle: data.jobTitle || null,
+          departmentId: data.departmentId || null,
+          managerId: data.managerId || null,
+          phone: data.phone || null,
+          entryDate: data.entryDate ? new Date(data.entryDate) : null,
+        },
+      });
+      await tx.teamMember.deleteMany({ where: { memberId: target.id } });
+      if (data.teamId) {
+        await tx.teamMember.create({
+          data: { teamId: data.teamId, memberId: target.id },
+        });
+      }
+    });
+
+    await logActivity({
+      action: "member.updated",
+      entity: "member",
+      entityId: target.id,
+      newData: { name: data.name, role },
+    });
+    return { id: target.id };
+  });
+}
+
+export async function removeCollaborator(id: string) {
+  return handleAction(async () => {
+    const { orgId, membership } = await getContext();
+    guardPerm(membership, "users.delete");
+
+    const target = await prisma.organizationMember.findFirst({
+      where: { id, organizationId: orgId },
+      include: { user: { select: { name: true } } },
+    });
+    if (!target) throw new AppError("NOT_FOUND", "Colaborador não encontrado.", 404);
+    if (target.id === membership.id) {
+      throw new AppError("FORBIDDEN", "Você não pode remover seu próprio acesso por esta tela.", 403);
+    }
+
+    guardCanAssign(membership, target.role);
+    if (target.role === "OWNER") {
+      const owners = await prisma.organizationMember.count({
+        where: { organizationId: orgId, role: "OWNER" },
+      });
+      if (owners <= 1) {
+        throw new AppError("LAST_OWNER", "A organização precisa manter ao menos um proprietário.", 403);
+      }
+    }
+
+    await logActivity({
+      action: "member.deleted",
+      entity: "member",
+      entityId: target.id,
+      newData: { name: target.user.name, role: target.role },
+    });
+    await prisma.organizationMember.delete({ where: { id: target.id } });
+    return ok({});
   });
 }
