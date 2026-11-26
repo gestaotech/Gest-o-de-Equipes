@@ -25,7 +25,7 @@ import {
 import { ensureCatalogs } from "@/lib/catalog";
 import { logActivity } from "@/server/activity";
 import { issueAccountToken, consumeAccountToken } from "@/server/account-token";
-import { sendPasswordResetEmail } from "@/lib/email";
+import { isEmailConfigured, sendPasswordResetEmail } from "@/lib/email";
 import { decrypt } from "@/lib/encryption";
 import { validateTOTP, validateBackupCode } from "@/server/two-factor-actions";
 import { consumeAttempt, resetAttempts } from "@/lib/db-rate-limit";
@@ -236,7 +236,16 @@ export async function requestReset(input: unknown) {
   return handleAction(async () => {
     const data = forgotSchema.parse(input);
     const email = normalizeEmail(data.email);
-    
+
+    // Falha de forma uniforme antes de consultar a conta, sem permitir enumeração.
+    if (!isEmailConfigured()) {
+      throw new AppError(
+        "EMAIL_UNAVAILABLE",
+        "A recuperação de senha está temporariamente indisponível. Entre em contato com o administrador.",
+        503
+      );
+    }
+
     // Busca usuário por e-mail
     const user = await prisma.user.findUnique({
       where: { email },
@@ -252,9 +261,7 @@ export async function requestReset(input: unknown) {
     // Isso automaticamente invalida quaisquer tokens anteriores do mesmo tipo
     const rawToken = await issueAccountToken(user.id, 'PASSWORD_RESET');
     
-    // Envia e-mail com link de redefinição
-    // Se o provedor não estiver configurado, o token é registrado em log (desenvolvimento)
-    // ou apenas documentado (produção), sem simular sucesso
+    // Envia e-mail com link de redefinição.
     await sendPasswordResetEmail(email, rawToken);
     
     return ok({ sent: true });
