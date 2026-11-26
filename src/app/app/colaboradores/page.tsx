@@ -20,16 +20,14 @@ function getAllowedRoles(userRole: RoleName): { label: string; value: string }[]
       { label: "Membro", value: "MEMBER" },
     ];
   }
-  // MANAGER: pode qualquer exceto OWNER
-  if (userRole === "MANAGER") {
+  // ADMIN: pode atribuir apenas papéis inferiores ao seu.
+  if (userRole === "ADMIN") {
     return [
-      { label: "Administrador", value: "ADMIN" },
       { label: "Gerente", value: "MANAGER" },
       { label: "Líder", value: "LEADER" },
       { label: "Membro", value: "MEMBER" },
     ];
   }
-  // LEADER e MEMBER: ninguêm
   return [];
 }
 
