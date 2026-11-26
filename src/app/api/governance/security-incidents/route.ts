@@ -33,12 +33,15 @@ export async function POST(request: NextRequest) {
     guardRole(scope.membership, "ADMIN");
     const body: Record<string, unknown> = await request.json();
 
+    const title = typeof body.title === "string" ? body.title.trim() : "";
+    const description = typeof body.description === "string" ? body.description.trim() : "";
+    const category = typeof body.category === "string" ? body.category.trim() : "";
+    const severity = typeof body.severity === "string" ? body.severity : "";
     if (
-      typeof body.title !== "string" || !body.title.trim() ||
-      typeof body.description !== "string" || !body.description.trim() ||
-      typeof body.category !== "string" || !body.category.trim() ||
-      typeof body.severity !== "string" ||
-      !(SEVERITIES as readonly string[]).includes(body.severity)
+      !title ||
+      !description ||
+      !category ||
+      !(SEVERITIES as readonly string[]).includes(severity)
     ) {
       return NextResponse.json({ error: "Informe título, descrição, categoria e gravidade válidos." }, { status: 400 });
     }
@@ -56,10 +59,10 @@ export async function POST(request: NextRequest) {
     const incident = await prisma.securityIncident.create({
       data: {
         organizationId: scope.orgId,
-        title: body.title.trim(),
-        description: body.description.trim(),
-        category: body.category.trim(),
-        severity: body.severity as (typeof SEVERITIES)[number],
+        title,
+        description,
+        category,
+        severity: severity as (typeof SEVERITIES)[number],
         systemsAffected: typeof body.systemsAffected === "string" ? body.systemsAffected : null,
         dataCompromised: typeof body.dataCompromised === "string" ? body.dataCompromised : null,
         subjectsAffected: typeof body.subjectsAffected === "number" ? body.subjectsAffected : null,
