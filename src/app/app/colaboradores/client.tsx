@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2, Users } from "lucide-react";
-import { addCollaborator } from "@/server/people-actions";
+import { addCollaborator, updateCollaborator, removeCollaborator } from "@/server/people-actions";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -125,10 +125,10 @@ export function TeammatesClient({
     const res =
       (dialog.mode === "add"
         ? await addCollaborator(payload)
-        : await addCollaborator({ id: dialog.id!, ...payload })) as ActionResult<{
+        : await updateCollaborator({ id: dialog.id!, ...payload })) as ActionResult<{
         id: string;
-        createdUser: boolean;
-        firstAccessUrl: string | null;
+        createdUser?: boolean;
+        firstAccessUrl?: string | null;
       }>;
     setBusy(false);
     if (res.success) {
@@ -146,7 +146,7 @@ export function TeammatesClient({
   async function confirmDelete() {
     if (!deleting) return;
     setBusy(true);
-    const res = { success: true } as ActionResult as ActionResult;
+    const res = (await removeCollaborator(deleting.id)) as ActionResult;
     setBusy(false);
     if (res.success) {
       toast("Colaborador removido.");
@@ -178,9 +178,9 @@ export function TeammatesClient({
         <div className="rounded-xl border border-dashed bg-muted/50 px-4 py-3 text-sm">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="font-medium">Link de primeiro acesso (modo dev)</p>
+              <p className="font-medium">Link de primeiro acesso</p>
               <p className="text-xs text-muted-foreground">
-                Em produção o token é enviado por e-mail. Copie e envie ao colaborador:
+                Copie e envie ao colaborador por um canal seguro. O link é de uso único e expira em 24 horas:
               </p>
               <a href={devLink} className="mt-1 block break-all font-mono text-xs text-blue-600 underline">
                 {devLink}
