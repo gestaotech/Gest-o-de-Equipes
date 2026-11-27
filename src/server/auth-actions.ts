@@ -21,7 +21,6 @@ import {
   firstAccessSchema,
   accountUpdateSchema,
 } from "@/lib/validations";
-import { ensureCatalogs } from "@/lib/catalog";
 import { logActivity } from "@/server/activity";
 import { issueAccountToken, consumeAccountToken } from "@/server/account-token";
 import { isEmailConfigured, sendPasswordResetEmail } from "@/lib/email";
