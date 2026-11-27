@@ -15,7 +15,6 @@ import {
 } from "@/lib/auth";
 import { handleAction, AppError, ok } from "@/lib/errors";
 import {
-  signUpSchema,
   loginSchema,
   forgotSchema,
   resetSchema,
@@ -48,30 +47,20 @@ async function sessionMeta() {
   }
 }
 
-export async function register(input: unknown) {
+/**
+ * Cadastro público permanentemente desativado.
+ * Novas contas só podem ser provisionadas por um membro autorizado
+ * através do fluxo de colaboradores e ativadas por convite de primeiro acesso.
+ * Esta verificação no servidor impede chamadas diretas à Server Action,
+ * mesmo que alguém tente reutilizar uma versão antiga do formulário.
+ */
+export async function register(_input: unknown) {
   return handleAction(async () => {
-    const data = signUpSchema.parse(input);
-    const email = normalizeEmail(data.email);
-    const meta = await sessionMeta();
-    await consumeAttempt(`register:${meta.ip ?? "unknown"}`, 5, 60 * 60 * 1000);
-
-    // Prepare global roles, permissions and plans before creating the account.
-    // If catalog initialization fails, do not leave an unusable user behind.
-    await ensureCatalogs();
-
-    const exists = await prisma.user.findUnique({ where: { email } });
-    if (exists) {
-      throw new AppError("EMAIL_IN_USE", "Este e-mail já está cadastrado. Faça login.", 409);
-    }
-    const user = await prisma.user.create({
-      data: {
-        name: data.name.trim(),
-        email,
-        passwordHash: await hashPassword(data.password),
-      },
-    });
-    await createSession({ sub: user.id, email: user.email, name: user.name }, await sessionMeta());
-    return { id: user.id, name: user.name };
+    throw new AppError(
+      "PUBLIC_SIGNUP_DISABLED",
+      "O cadastro público está desativado. Solicite acesso ao administrador da sua organização.",
+      403
+    );
   });
 }
 
