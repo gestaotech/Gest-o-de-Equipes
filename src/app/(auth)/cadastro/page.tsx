@@ -1,26 +1,31 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { SignupForm } from "@/components/auth/signup-form";
 
-export const metadata: Metadata = { title: "Criar conta" };
+export const metadata: Metadata = { title: "Acesso restrito" };
 
-type SignupPageProps = {
-  searchParams: Promise<{ plan?: string }>;
-};
-
-const VALID_PLANS = ["MENSAL", "ANUAL"] as const;
-
-export default async function SignupPage({ searchParams }: SignupPageProps) {
-  const params = await searchParams;
-  const selectedPlan = VALID_PLANS.includes(params.plan as (typeof VALID_PLANS)[number])
-    ? params.plan
-    : undefined;
+export default async function SignupPage() {
   const session = await getSession();
 
   if (session) {
-    redirect(selectedPlan ? `/contratar?plan=${selectedPlan}` : "/criar-org");
+    redirect("/dashboard");
   }
 
-  return <SignupForm selectedPlan={selectedPlan} />;
+  return (
+    <div className="mx-auto w-full max-w-md rounded-xl border bg-card p-6 text-center shadow-sm">
+      <h1 className="text-xl font-semibold">Cadastro por convite</h1>
+      <p className="mt-3 text-sm text-muted-foreground">
+        A criação de contas por conta própria não está disponível.
+        Para acessar o Gestão de Equipes, solicite ao administrador da sua
+        organização que cadastre seu usuário e envie o convite de primeiro acesso.
+      </p>
+      <Link
+        href="/login"
+        className="mt-6 inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+      >
+        Ir para o login
+      </Link>
+    </div>
+  );
 }
