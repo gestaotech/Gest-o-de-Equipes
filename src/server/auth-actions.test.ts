@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { requestReset, resetPassword, completeFirstAccess } from "@/server/auth-actions";
+import { register, requestReset, resetPassword, completeFirstAccess } from "@/server/auth-actions";
 
 vi.mock("@prisma/client", () => ({
   Prisma: { PrismaClientKnownRequestError: class {} },
@@ -10,6 +10,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     user: {
       findUnique: vi.fn(),
+      create: vi.fn(),
       update: vi.fn(),
     },
     userSession: {
@@ -57,6 +58,20 @@ const mockedPrisma = prisma as unknown as {
 const { isEmailConfigured, sendPasswordResetEmail } = await import("@/lib/email");
 
 const future = () => new Date(Date.now() + 60_000);
+
+describe("register", () => {
+  it("bloqueia qualquer tentativa de cadastro público no servidor", async () => {
+    const result = await register({
+      name: "Conta indevida",
+      email: "externo@example.com",
+      password: "SenhaForte123",
+    });
+
+    expect(result.success).toBe(false);
+    expect((result as { error?: { message?: string } }).error?.message).toContain("cadastro público está desativado");
+    expect(mockedPrisma.user.create).not.toHaveBeenCalled();
+  });
+});
 
 describe("requestReset", () => {
   beforeEach(() => {
