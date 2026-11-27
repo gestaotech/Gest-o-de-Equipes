@@ -42,6 +42,7 @@ vi.mock("@/lib/db-rate-limit", () => ({
 const mockedPrisma = prisma as unknown as {
   user: {
     findUnique: Mock;
+    create: Mock;
     update: Mock;
   };
   userSession: {
