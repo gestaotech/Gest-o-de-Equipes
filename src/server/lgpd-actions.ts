@@ -279,7 +279,7 @@ export async function exportUserData(userId: string, verification?: { password?:
 
     // Verificação de identidade para ações sensíveis
     if (verification) {
-      await verifyIdentity(session, verification);
+      await verifyIdentity(scope.session, verification);
     }
 
     // Verificar se o usuário pertence à organização
@@ -311,11 +311,7 @@ export async function exportUserData(userId: string, verification?: { password?:
         goalMembers: { select: { id: true, goalId: true } },
       },
     });
-<<<<<<< HEAD
-    // Remover campos sensíveis da exportação
-=======
     // Não exportar os campos internos usados para criptografia e busca de CPF.
->>>>>>> 5da453bd8add7d1a97c12b78146089988231f7ee
     const { cpfEncrypted, cpfHmacIndex, ...safeMemberDetail } = memberDetail || {};
 
     const sessions = await prisma.userSession.findMany({
