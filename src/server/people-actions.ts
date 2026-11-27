@@ -14,9 +14,6 @@ import {
   guardCanAssign,
   validateOrgReferences,
   canCreateMember,
-  canChangeMemberRole,
-  guardLastOwnerProtection,
-  guardManagerCannotPromoteToOwner,
 } from "@/server/guards";
 import { logActivity } from "@/server/activity";
 import { hashPassword } from "@/lib/auth";
@@ -211,16 +208,14 @@ export async function addCollaborator(input: unknown) {
     const email = normalizeEmail(data.email);
 
     // Verificação hierárquica: quem pode criar qual role
-    const role = (
-      data.permission && ["OWNER", "ADMIN", "MANAGER", "LEADER", "MEMBER"].includes(data.permission)
-        ? data.permission
-        : "MEMBER"
-    ) as "OWNER" | "ADMIN" | "MANAGER" | "LEADER" | "MEMBER";
-
-    // MANAGER não pode criar/promover OWNER (canCreateMember cobre os demais casos)
-    if (role === "OWNER") {
-      guardManagerCannotPromoteToOwner(membership);
+    const validRoles = ["OWNER", "ADMIN", "MANAGER", "LEADER", "MEMBER"] as const;
+    if (data.permission && !validRoles.includes(data.permission as (typeof validRoles)[number])) {
+      throw new AppError("INVALID_ROLE", "Cargo/permissão inválido.", 400);
     }
+    const role = (data.permission || "MEMBER") as (typeof validRoles)[number];
+
+    // Impede atribuir papel igual ou superior ao do ator.
+    guardCanAssign(membership, role);
 
     // Verifica se o ator pode criar um membro com este role
     if (!canCreateMember(membership, role)) {
@@ -233,12 +228,6 @@ export async function addCollaborator(input: unknown) {
       departments: [data.departmentId],
       teams: [data.teamId],
     });
-
-    // Contagem de OWNERs para proteção do último
-    const ownersCount = await prisma.organizationMember.count({
-      where: { organizationId: orgId, role: "OWNER" },
-    });
-    guardLastOwnerProtection(membership, { owners: ownersCount });
 
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
@@ -287,7 +276,7 @@ export async function addCollaborator(input: unknown) {
           organizationId: orgId,
           userId,
           role,
-          jobTitle: data.jobTitle || role || null,
+          jobTitle: data.jobTitle || null,
           cpfEncrypted,
           cpfHmacIndex,
           phone: data.phone || null,
@@ -322,13 +311,149 @@ export async function addCollaborator(input: unknown) {
       },
     });
 
-    // Em produção o link NUNCA é devolvido (não há SMTP configurado).
-    // A entrega do token por e-mail fica como dependência pendente.
-    const safeReturn = process.env.NODE_ENV !== "production";
+    // O link de primeiro acesso é retornado somente ao administrador que criou
+    // o convite. É de uso único e expira; assim o fluxo funciona mesmo sem SMTP.
     return {
       id: member.id,
       createdUser,
-      firstAccessUrl: safeReturn && rawToken ? `/primeiro-acesso?t=${rawToken}` : null,
+      firstAccessUrl: rawToken ? `/primeiro-acesso?t=${rawToken}` : null,
     };
+  });
+}
+
+
+export async function updateCollaborator(input: { id: string } & Record<string, unknown>) {
+  return handleAction(async () => {
+    const { orgId, membership } = await getContext();
+    guardPerm(membership, "users.write");
+
+    if (!input?.id || typeof input.id !== "string") {
+      throw new AppError("INVALID", "Colaborador inválido.", 400);
+    }
+
+    const data = collaboratorSchema.parse(input);
+    const target = await prisma.organizationMember.findFirst({
+      where: { id: input.id, organizationId: orgId },
+      include: { user: { select: { id: true, name: true, email: true } } },
+    });
+    if (!target) throw new AppError("NOT_FOUND", "Colaborador não encontrado.", 404);
+
+    const validRoles = ["OWNER", "ADMIN", "MANAGER", "LEADER", "MEMBER"] as const;
+    if (data.permission && !validRoles.includes(data.permission as (typeof validRoles)[number])) {
+      throw new AppError("INVALID_ROLE", "Cargo/permissão inválido.", 400);
+    }
+    const role = (data.permission || target.role) as (typeof validRoles)[number];
+
+    if (target.id === membership.id && role !== target.role) {
+      throw new AppError("FORBIDDEN", "Você não pode alterar o próprio nível de acesso.", 403);
+    }
+    if (target.id !== membership.id) guardCanAssign(membership, target.role);
+    if (role !== target.role || target.id !== membership.id) guardCanAssign(membership, role);
+
+    const email = normalizeEmail(data.email);
+    if (email !== normalizeEmail(target.user.email)) {
+      throw new AppError(
+        "EMAIL_CHANGE_REQUIRES_USER",
+        "O e-mail de acesso deve ser alterado pelo próprio usuário nas configurações do perfil.",
+        403
+      );
+    }
+
+    if (data.managerId === target.id) {
+      throw new AppError("INVALID", "O colaborador não pode ser o próprio gestor.", 400);
+    }
+
+    // Impede ciclos na hierarquia de gestores (A -> B -> C -> A).
+    let managerCursor = data.managerId || null;
+    const visitedManagers = new Set<string>();
+    while (managerCursor) {
+      if (managerCursor === target.id) {
+        throw new AppError("INVALID", "Esta alteração criaria um ciclo na hierarquia de gestores.", 400);
+      }
+      if (visitedManagers.has(managerCursor)) {
+        throw new AppError("INVALID", "A hierarquia atual de gestores contém um ciclo.", 409);
+      }
+      visitedManagers.add(managerCursor);
+      const manager = await prisma.organizationMember.findFirst({
+        where: { id: managerCursor, organizationId: orgId },
+        select: { managerId: true },
+      });
+      managerCursor = manager?.managerId ?? null;
+    }
+
+    await validateOrgReferences(orgId, {
+      members: [data.managerId],
+      departments: [data.departmentId],
+      teams: [data.teamId],
+    });
+
+    await prisma.$transaction(async (tx) => {
+      // E-mail é uma identidade global e não pode ser alterado por um administrador
+      // de apenas uma organização; somente o próprio usuário pode alterá-lo no perfil.
+      await tx.user.update({
+        where: { id: target.userId },
+        data: { name: data.name.trim() },
+      });
+      await tx.organizationMember.update({
+        where: { id: target.id },
+        data: {
+          role,
+          jobTitle: data.jobTitle || null,
+          departmentId: data.departmentId || null,
+          managerId: data.managerId || null,
+          phone: data.phone || null,
+          entryDate: data.entryDate ? new Date(data.entryDate) : null,
+        },
+      });
+      await tx.teamMember.deleteMany({ where: { memberId: target.id } });
+      if (data.teamId) {
+        await tx.teamMember.create({
+          data: { teamId: data.teamId, memberId: target.id },
+        });
+      }
+    });
+
+    await logActivity({
+      action: "member.updated",
+      entity: "member",
+      entityId: target.id,
+      newData: { name: data.name, role },
+    });
+    return { id: target.id };
+  });
+}
+
+export async function removeCollaborator(id: string) {
+  return handleAction(async () => {
+    const { orgId, membership } = await getContext();
+    guardPerm(membership, "users.delete");
+
+    const target = await prisma.organizationMember.findFirst({
+      where: { id, organizationId: orgId },
+      include: { user: { select: { name: true } } },
+    });
+    if (!target) throw new AppError("NOT_FOUND", "Colaborador não encontrado.", 404);
+    if (target.id === membership.id) {
+      throw new AppError("FORBIDDEN", "Você não pode remover seu próprio acesso por esta tela.", 403);
+    }
+
+    guardCanAssign(membership, target.role);
+    if (target.role === "OWNER") {
+      const owners = await prisma.organizationMember.count({
+        where: { organizationId: orgId, role: "OWNER" },
+      });
+      if (owners <= 1) {
+        throw new AppError("LAST_OWNER", "A organização precisa manter ao menos um proprietário.", 403);
+      }
+    }
+
+    await logActivity({
+      action: "member.deleted",
+      entity: "member",
+      entityId: target.id,
+      newData: { name: target.user.name, role: target.role },
+    });
+    await prisma.organizationMember.delete({ where: { id: target.id } });
+    return ok({});
   });
 }

@@ -200,20 +200,25 @@ export async function ensureCatalogs(): Promise<void> {
   }
 
   for (const p of PLANS) {
+    // contact/note são metadados de apresentação e não pertencem ao modelo Plan.
+    // Nunca encaminhá-los ao Prisma para evitar campos desconhecidos.
+    const { contact: _contact, note: _note, ...planData } = p;
+    void _contact;
+    void _note;
     await prisma.plan.upsert({
-      where: { tier: p.tier },
+      where: { tier: planData.tier },
       update: {
-        name: p.name,
-        maxUsers: p.maxUsers,
-        maxTeams: p.maxTeams,
-        maxProjects: p.maxProjects,
-        advancedReports: p.advancedReports,
-        integrations: p.integrations,
-        aiFeatures: p.aiFeatures,
-        priceMonthly: p.priceMonthly,
-        priceYearly: p.priceYearly,
+        name: planData.name,
+        maxUsers: planData.maxUsers,
+        maxTeams: planData.maxTeams,
+        maxProjects: planData.maxProjects,
+        advancedReports: planData.advancedReports,
+        integrations: planData.integrations,
+        aiFeatures: planData.aiFeatures,
+        priceMonthly: planData.priceMonthly,
+        priceYearly: planData.priceYearly,
       },
-      create: p,
+      create: planData,
     });
   }
 }

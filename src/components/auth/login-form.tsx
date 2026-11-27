@@ -13,7 +13,7 @@ import type { ActionResult } from "@/lib/types";
 
 type Step = "password" | "totp";
 
-export function LoginForm() {
+export function LoginForm({ next }: { next?: string }) {
   const router = useRouter();
   const [step, setStep] = useState<Step>("password");
   const [tempToken, setTempToken] = useState("");
@@ -21,7 +21,8 @@ export function LoginForm() {
   const [pending, startTransition] = useTransition();
 
   function redirectAfterLogin(hasOrg?: boolean) {
-    router.push(hasOrg ? "/dashboard" : "/criar-org");
+    const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : null;
+    router.push(safeNext ?? (hasOrg ? "/dashboard" : "/criar-org"));
     router.refresh();
   }
 

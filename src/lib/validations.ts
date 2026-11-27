@@ -167,11 +167,15 @@ export const collaboratorSchema = z.object({
   departmentId: z.string().optional().nullable(),
   teamId: z.string().optional().nullable(),
   managerId: z.string().optional().nullable(),
-  entryDate: z.string().optional().nullable(),
+  entryDate: z.string().optional().nullable().refine(
+    (value) => !value || !Number.isNaN(Date.parse(value)),
+    "Data de admissão inválida."
+  ),
   phone: z
     .string()
     .regex(/^[0-9+\-\s()]{8,20}$/, "Telefone inválido.")
-    .optional(),
+    .optional()
+    .nullable(),
 });
 
 export const projectSchema = z.object({

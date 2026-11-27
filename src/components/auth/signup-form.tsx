@@ -11,8 +11,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/components/ui/toast";
 import type { ActionResult } from "@/lib/types";
 
-export function SignupForm() {
+export function SignupForm({ selectedPlan }: { selectedPlan?: string }) {
   const router = useRouter();
+  const destination = selectedPlan
+    ? `/criar-org?plan=${encodeURIComponent(selectedPlan)}`
+    : "/criar-org";
+  const loginHref = selectedPlan
+    ? `/login?next=${encodeURIComponent(`/contratar?plan=${selectedPlan}`)}`
+    : "/login";
 
   const [state, formAction, pending] = useActionState(
     async (_prev: ActionResult, formData: FormData) => {
@@ -24,7 +30,7 @@ export function SignupForm() {
       if (res.success) {
         toast("Conta criada!");
         setTimeout(() => {
-          router.push("/criar-org");
+          router.push(destination);
           router.refresh();
         }, 200);
       } else {
@@ -38,9 +44,9 @@ export function SignupForm() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Criar conta</CardTitle>
+        <CardTitle>{selectedPlan ? "Crie sua conta para contratar" : "Criar conta"}</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Comece grátis. Sem cartão de crédito.
+          {selectedPlan ? "Depois do cadastro, configure sua empresa e conclua o pagamento com segurança." : "Comece grátis. Sem cartão de crédito."}
         </p>
       </CardHeader>
       <CardContent>
@@ -59,9 +65,7 @@ export function SignupForm() {
             <p className="mt-1 text-xs text-muted-foreground">Mínimo de 6 caracteres.</p>
           </div>
           {state.error && (
-            <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-              {state.error.message}
-            </div>
+            <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{state.error.message}</div>
           )}
           <Button type="submit" className="w-full" loading={pending}>
             Criar minha conta
@@ -69,9 +73,7 @@ export function SignupForm() {
         </form>
         <div className="mt-4 text-center text-sm text-muted-foreground">
           Já tem conta?{" "}
-          <Link href="/login" className="font-medium text-blue-600 hover:underline">
-            Entrar
-          </Link>
+          <Link href={loginHref} className="font-medium text-blue-600 hover:underline">Entrar</Link>
         </div>
       </CardContent>
     </Card>

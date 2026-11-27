@@ -21,7 +21,6 @@ import {
 import { Logo } from "@/components/ui/logo";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { PLANS as CATALOG_PLANS } from "@/lib/plans";
 
 const FEATURES = [
   {
@@ -63,72 +62,26 @@ const STEPS = [
   { n: "04", t: "Acompanhe tudo", d: "Dashboard em tempo real, agenda e comunicações." },
 ];
 
-const PLANS = CATALOG_PLANS.map((p) => {
-  const priceMonthly = p.priceMonthly > 0 ? p.priceMonthly : null;
-  const priceYearly = p.priceYearly > 0 ? p.priceYearly : null;
-
-  return {
-    id: p.tier,
-    name: p.name,
-    price:
-      priceMonthly
-        ? "R$ " + p.priceMonthly.toLocaleString("pt-BR", { minimumFractionDigits: 2 })
-        : priceYearly
-          ? "R$ " + p.priceYearly.toLocaleString("pt-BR", { minimumFractionDigits: 2 })
-          : "Sob consulta",
-    period:
-      priceMonthly
-        ? "/mês por empresa"
-        : priceYearly
-          ? "/ano por empresa"
-          : "/sob consulta",
-    desc:
-      p.name === "Mensal"
-        ? "Para pequenos times que precisam de organização essencial."
-        : p.name === "Anual"
-          ? "Para times em crescimento com relatórios avançados."
-          : "Para empresas que precisam de escala completa com integrações e IA.",
-    features: (() => {
-      const feats: string[] = [];
-      if (p.maxUsers) feats.push("Até " + p.maxUsers + " colaboradores");
-      if (p.maxTeams) feats.push("Até " + p.maxTeams + " equipes");
-      if (p.maxProjects) feats.push("Até " + p.maxProjects + " projetos");
-      else feats.push("Projetos ilimitados");
-      if (p.advancedReports) feats.push("Relatórios avançados");
-      if (p.integrations) feats.push("Integrações");
-      if (p.aiFeatures) feats.push("Recursos de IA");
-      return feats;
-    })(),
-    cta:
-      p.priceYearly > 0 && p.priceMonthly === 0
-        ? "Assinar anual"
-        : p.priceMonthly > 0
-          ? "Assinar mensal"
-          : "Falar com vendas",
-    highlight: p.tier === "ANUAL",
-  };
-});
-
 const FAQ = [
   {
     q: "O que é o TeamFlow?",
     a: "É a plataforma de gestão operacional da sua empresa: colaboradores, departamentos, equipes, projetos, tarefas, metas, agenda e comunicados em um único lugar.",
   },
   {
-    q: "Preciso de cartão de crédito para começar?",
-    a: "Não. Comece com 14 dias grátis, sem cartão de crédito.",
+    q: "Como faço para contratar?",
+    a: "Escolha na página inicial a modalidade sem integração ou com integração e fale com nossa equipe pelo WhatsApp.",
   },
   {
     q: "Meus dados ficam seguros?",
     a: "Sim. Usamos PostgreSQL gerenciado, criptografia de senhas e controle de acesso por papel. Cada organização tem seus dados isolados.",
   },
   {
-    q: "Posso cancelar quando quiser?",
-    a: "Sim. Você pode fazer downgrade ou cancelar a assinatura a qualquer momento, sem multa.",
+    q: "Qual é a diferença entre as modalidades?",
+    a: "Na modalidade sem integração, sua empresa utiliza o Gestão de Equipes de forma independente. Na modalidade com integração, avaliamos as conexões necessárias com outros sistemas.",
   },
   {
-    q: "Posso mudar de plano depois?",
-    a: "Sim. Você pode alterar seu plano a qualquer momento e as mudanças valem a partir do próximo ciclo de cobrança.",
+    q: "Como são definidos os valores?",
+    a: "Nossa equipe comercial entende a estrutura da empresa, a quantidade de usuários e as integrações desejadas para apresentar uma proposta.",
   },
 ];
 
@@ -202,9 +155,9 @@ function Header() {
           <Link href="/login" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
             Entrar
           </Link>
-          <Link href="/cadastro" className="inline-flex h-11 items-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700">
-            Começar grátis <ArrowRight className="h-4 w-4" />
-          </Link>
+          <a href="#planos" className="inline-flex h-11 items-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700">
+            Contratar sistema <ArrowRight className="h-4 w-4" />
+          </a>
         </div>
       </div>
     </header>
@@ -229,11 +182,11 @@ function Hero() {
           Colaboradores, departamentos, equipes, projetos, tarefas e metas organizados em uma plataforma que sua empresa realmente usa.
         </p>
         <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row sm:justify-center">
-          <Link href="/cadastro" className="inline-flex h-12 items-center gap-2 rounded-lg bg-blue-600 px-7 text-base font-medium text-white shadow-lg shadow-blue-600/20 transition-colors hover:bg-blue-700">
-            Começar grátis <ArrowRight className="h-4 w-4" />
-          </Link>
-          <a href="#planos" className="inline-flex h-12 items-center rounded-lg border border-border bg-background px-7 text-base font-medium text-foreground transition-colors hover:bg-accent">
-            Ver planos
+          <a href="#planos" className="inline-flex h-12 items-center gap-2 rounded-lg bg-blue-600 px-7 text-base font-medium text-white shadow-lg shadow-blue-600/20 transition-colors hover:bg-blue-700">
+            Ver opções de contratação <ArrowRight className="h-4 w-4" />
+          </a>
+          <a href="https://wa.me/5561998361296?text=Ol%C3%A1%21%20Gostaria%20de%20conhecer%20o%20Gest%C3%A3o%20de%20Equipes." target="_blank" rel="noopener noreferrer" className="inline-flex h-12 items-center rounded-lg border border-border bg-background px-7 text-base font-medium text-foreground transition-colors hover:bg-accent">
+            Falar com vendas
           </a>
         </div>
         <div className="mx-auto mt-14 grid max-w-5xl grid-cols-2 gap-6 sm:grid-cols-4 lg:grid-cols-6">
@@ -384,39 +337,31 @@ function HowItWorks() {
 }
 
 function Pricing() {
+  const options = [
+    { title: "Sem integração entre sistemas", description: "Ideal para organizar colaboradores, equipes, projetos, tarefas e metas em uma única plataforma.", features: ["Uso independente do Gestão de Equipes", "Gestão de colaboradores e departamentos", "Projetos, tarefas, metas e indicadores", "Implantação orientada pela nossa equipe"], href: "https://wa.me/5561998361296?text=Ol%C3%A1%21%20Tenho%20interesse%20em%20contratar%20o%20Gest%C3%A3o%20de%20Equipes%20sem%20integra%C3%A7%C3%A3o%20entre%20sistemas.", label: "Contratar sem integração" },
+    { title: "Com integração entre sistemas", description: "Para empresas que desejam conectar o Gestão de Equipes a outros sistemas e automatizar seus processos.", features: ["Todos os recursos da modalidade sem integração", "Levantamento dos sistemas que serão conectados", "Avaliação técnica das integrações necessárias", "Proposta comercial personalizada"], href: "https://wa.me/5561998361296?text=Ol%C3%A1%21%20Tenho%20interesse%20em%20contratar%20o%20Gest%C3%A3o%20de%20Equipes%20com%20integra%C3%A7%C3%A3o%20entre%20sistemas.", label: "Contratar com integração", highlight: true },
+  ];
   return (
-    <section id="planos" className="page-container py-24 sm:py-24">
+    <section id="planos" className="page-container py-24 sm:py-28">
       <div className="mx-auto max-w-2xl text-center">
-        <p className="text-sm font-semibold text-blue-600">Planos</p>
-        <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Escolha o plano certo</h2>
-        <p className="mt-3 text-muted-foreground">Comece grátis e evolua quando sua equipe crescer.</p>
+        <p className="text-sm font-semibold text-blue-600">Contratação</p>
+        <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Escolha como sua empresa quer utilizar o sistema</h2>
+        <p className="mt-3 text-muted-foreground">Fale diretamente com nossa equipe comercial. Vamos entender sua necessidade e orientar a contratação.</p>
       </div>
-      <div className="mt-16 grid gap-6 lg:grid-cols-3">
-        {PLANS.map((p) => (
-          <div key={p.name} className={p.highlight ? "relative rounded-xl border-2 border-blue-600 bg-card p-6 shadow-lg" : "rounded-xl border bg-card p-6"}>
-            {p.highlight && (
-              <span className="absolute -top-3 left-6 rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white">Mais popular</span>
-            )}
-            <h3 className="font-semibold">{p.name}</h3>
-            <p className="mt-2 text-sm text-muted-foreground">{p.desc}</p>
-            <div className="mt-4 flex items-baseline gap-1">
-              <span className="text-3xl font-bold">{p.price}</span>
-              <span className="text-sm text-muted-foreground">{p.period}</span>
-            </div>
-            <ul className="mt-5 space-y-2.5">
-              {p.features.map((f) => (
-                <li key={f} className="flex items-start gap-2 text-sm">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
-                  <span className="text-foreground">{f}</span>
-                </li>
-              ))}
+      <div className="mx-auto mt-14 grid max-w-5xl gap-6 lg:grid-cols-2">
+        {options.map((option) => (
+          <div key={option.title} className={option.highlight ? "relative rounded-2xl border-2 border-blue-600 bg-card p-7 shadow-lg" : "rounded-2xl border border-border bg-card p-7"}>
+            {option.highlight && <span className="absolute -top-3 left-6 rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white">Solução personalizada</span>}
+            <h3 className="text-xl font-semibold">{option.title}</h3>
+            <p className="mt-3 min-h-14 text-sm leading-relaxed text-muted-foreground">{option.description}</p>
+            <ul className="mt-6 space-y-3">
+              {option.features.map((feature) => <li key={feature} className="flex items-start gap-2 text-sm"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" /><span>{feature}</span></li>)}
             </ul>
-            <Link href="/cadastro" className={p.highlight ? "mt-6 inline-flex h-11 w-full items-center justify-center rounded-lg bg-blue-600 text-sm font-medium text-white transition-colors hover:bg-blue-700" : "mt-6 inline-flex h-11 w-full items-center justify-center rounded-lg border border-border text-sm font-medium transition-colors hover:bg-accent"}>
-              {p.cta}
-            </Link>
+            <a href={option.href} target="_blank" rel="noopener noreferrer" className={option.highlight ? "mt-8 inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-semibold text-white transition-colors hover:bg-blue-700" : "mt-8 inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg border border-border px-5 text-sm font-semibold transition-colors hover:bg-accent"}>{option.label} <ArrowRight className="h-4 w-4" /></a>
           </div>
         ))}
       </div>
+      <p className="mt-7 text-center text-sm text-muted-foreground">Valores, prazos e condições são apresentados pela equipe comercial após entender sua necessidade.</p>
     </section>
   );
 }
@@ -448,11 +393,9 @@ function FinalCta() {
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 to-blue-800 px-6 py-14 text-center text-white">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_60%_at_50%_0%,rgba(255,255,255,0.15),transparent)]" />
         <h2 className="relative text-3xl font-bold tracking-tight sm:text-4xl">Pronto para organizar sua operação?</h2>
-        <p className="relative mx-auto mt-3 max-w-xl text-blue-100">Crie sua conta grátis e monte o time, os projetos e as metas da sua empresa em minutos.</p>
+        <p className="relative mx-auto mt-3 max-w-xl text-blue-100">Escolha a modalidade ideal para sua empresa e converse com nossa equipe para iniciar a contratação.</p>
         <div className="relative mt-7">
-          <Link href="/cadastro" className="inline-flex h-12 items-center gap-2 rounded-lg bg-white px-6 text-base font-medium text-blue-700 transition-colors hover:bg-blue-50">
-            Começar grátis <ArrowRight className="h-4 w-4" />
-          </Link>
+          <a href="#planos" className="inline-flex h-12 items-center gap-2 rounded-lg bg-white px-6 text-base font-medium text-blue-700 transition-colors hover:bg-blue-50">Ver opções de contratação <ArrowRight className="h-4 w-4" /></a>
         </div>
       </div>
     </section>

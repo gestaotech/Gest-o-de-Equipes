@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 import { handleAction, AppError, ok } from "@/lib/errors";
 import { requireSessionApi } from "@/lib/auth";
 import { requireDataScope } from "@/server/scope";
-import { logActivity } from "@/server/activity";
 
 export async function getNotifications() {
   return handleAction(async () => {
@@ -115,26 +114,5 @@ export async function getUnreadCount() {
     });
 
     return ok({ unreadCount: count });
-  });
-}
-
-/**
- * Função auxiliar para criar notificações (usada internamente por outras actions)
- */
-export async function createNotification(data: {
-  organizationId: string;
-  userId: string;
-  type: string;
-  title: string;
-  message?: string;
-}) {
-  return prisma.notification.create({
-    data: {
-      organizationId: data.organizationId,
-      userId: data.userId,
-      type: data.type,
-      title: data.title,
-      message: data.message,
-    },
   });
 }

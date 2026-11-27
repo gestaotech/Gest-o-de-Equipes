@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2, Users } from "lucide-react";
-import { addCollaborator } from "@/server/people-actions";
+import { addCollaborator, updateCollaborator, removeCollaborator } from "@/server/people-actions";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -125,10 +125,10 @@ export function TeammatesClient({
     const res =
       (dialog.mode === "add"
         ? await addCollaborator(payload)
-        : await addCollaborator({ id: dialog.id!, ...payload })) as ActionResult<{
+        : await updateCollaborator({ id: dialog.id!, ...payload })) as ActionResult<{
         id: string;
-        createdUser: boolean;
-        firstAccessUrl: string | null;
+        createdUser?: boolean;
+        firstAccessUrl?: string | null;
       }>;
     setBusy(false);
     if (res.success) {
@@ -146,7 +146,7 @@ export function TeammatesClient({
   async function confirmDelete() {
     if (!deleting) return;
     setBusy(true);
-    const res = { success: true } as ActionResult as ActionResult;
+    const res = (await removeCollaborator(deleting.id)) as ActionResult;
     setBusy(false);
     if (res.success) {
       toast("Colaborador removido.");
@@ -178,9 +178,9 @@ export function TeammatesClient({
         <div className="rounded-xl border border-dashed bg-muted/50 px-4 py-3 text-sm">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="font-medium">Link de primeiro acesso (modo dev)</p>
+              <p className="font-medium">Link de primeiro acesso</p>
               <p className="text-xs text-muted-foreground">
-                Em produção o token é enviado por e-mail. Copie e envie ao colaborador:
+                Copie e envie ao colaborador por um canal seguro. O link é de uso único e expira em 24 horas:
               </p>
               <a href={devLink} className="mt-1 block break-all font-mono text-xs text-blue-600 underline">
                 {devLink}
@@ -258,32 +258,30 @@ export function TeammatesClient({
                   </TableCell>
                   <TableCell className="text-muted-foreground">{formatDate(m.entryDate)}</TableCell>
                   <TableCell>
-                    {(canWrite || canDelete) && (
-                      <Dropdown
-                        trigger={<Button variant="ghost" size="sm">•••</Button>}
-                        items={[
-                          ...(canWrite
-                            ? [
-                                {
+                    {(canWrite || canDelete) &&
+                      allowedRoles.some((option) => option.value === m.role) &&
+                      (canWrite || (canDelete && m.id !== selfMemberId)) && (
+                        <Dropdown
+                          trigger={<Button variant="ghost" size="sm">•••</Button>}
+                          items={[
+                            ...(canWrite
+                              ? [{
                                   label: "Editar",
                                   icon: <Pencil className="h-4 w-4" />,
                                   onClick: () => openEdit(m),
-                                },
-                              ]
-                            : []),
-                          ...(canDelete
-                            ? [
-                                {
+                                }]
+                              : []),
+                            ...(canDelete && m.id !== selfMemberId
+                              ? [{
                                   label: "Remover",
                                   icon: <Trash2 className="h-4 w-4" />,
                                   danger: true,
                                   onClick: () => setDeleting(m),
-                                },
-                              ]
-                            : []),
-                        ]}
-                      />
-                    )}
+                                }]
+                              : []),
+                          ]}
+                        />
+                      )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -311,7 +309,8 @@ export function TeammatesClient({
           </div>
             <div className="sm:col-span-2">
               <Label>E-mail *</Label>
-              <Input required value={dialog?.form.email} onChange={(e) => set({ email: e.target.value })} placeholder="voce@empresa.com" />
+              <Input required disabled={dialog?.mode === "edit"} value={dialog?.form.email} onChange={(e) => set({ email: e.target.value })} placeholder="voce@empresa.com" />
+              {dialog?.mode === "edit" && <p className="mt-1 text-xs text-muted-foreground">O e-mail de acesso é global e só pode ser alterado pelo próprio usuário no perfil.</p>}
             </div>
           <div>
             <Label>Cargo</Label>

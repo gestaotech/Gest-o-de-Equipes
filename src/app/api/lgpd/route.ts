@@ -1,29 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSessionApi } from "@/lib/auth";
-import { requireDataScope } from "@/server/scope";
 import { AppError } from "@/lib/errors";
 import {
   createLGPDRequest,
   listLGPDRequests,
   updateLGPDRequestStatus,
-  getLGPDRequest,
   exportUserData,
-  anonymizeUserData,
   deleteUserData,
 } from "@/server/lgpd-actions";
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await requireSessionApi();
-    const scope = await requireDataScope();
-
     const { searchParams } = new URL(request.url);
     const action = searchParams.get("action");
 
     switch (action) {
       case "list": {
         const result = await listLGPDRequests();
-        return NextResponse.json(result);
+        const response = NextResponse.json(result);
+        response.headers.set("Cache-Control", "private, no-store");
+        return response;
       }
       case "export": {
         const userId = searchParams.get("userId");
@@ -31,23 +26,16 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ error: "userId é obrigatório." }, { status: 400 });
         }
         const result = await exportUserData(userId);
-        return NextResponse.json(result);
+        const response = NextResponse.json(result);
+        response.headers.set("Cache-Control", "private, no-store");
+        return response;
       }
-      case "anonymize": {
-        const userId = searchParams.get("userId");
-        if (!userId) {
-          return NextResponse.json({ error: "userId é obrigatório." }, { status: 400 });
-        }
-        const result = await anonymizeUserData(userId);
-        return NextResponse.json(result);
-      }
+      case "anonymize":
       case "delete": {
-        const userId = searchParams.get("userId");
-        if (!userId) {
-          return NextResponse.json({ error: "userId é obrigatório." }, { status: 400 });
-        }
-        const result = await deleteUserData(userId);
-        return NextResponse.json(result);
+        return NextResponse.json(
+          { error: "Operações de anonimização e exclusão não podem ser executadas por GET." },
+          { status: 405 }
+        );
       }
       default: {
         return NextResponse.json({ error: "Ação não especificada." }, { status: 400 });
@@ -62,8 +50,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await requireSessionApi();
-    const scope = await requireDataScope();
     const body: Record<string, unknown> = await request.json();
 
     const result = await createLGPDRequest({
@@ -71,7 +57,9 @@ export async function POST(request: NextRequest) {
       // userId e requesterId são definidos na action com base na sessão
     });
 
-    return NextResponse.json(result, { status: 201 });
+    const response = NextResponse.json(result, { status: 201 });
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro interno.";
     const statusCode = error instanceof AppError ? error.status : 500;
@@ -81,8 +69,6 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const session = await requireSessionApi();
-    const scope = await requireDataScope();
     const body = await request.json();
     const { requestId, status, rejectionReason, comment } = body;
 
@@ -102,17 +88,14 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error) {
-    return NextResponse.json(
-      { error: (error as Error).message || "Erro interno." },
-      { status: (error as { statusCode?: number }).statusCode ?? 500 }
-    );
+    const message = error instanceof Error ? error.message : "Erro interno.";
+    const statusCode = error instanceof AppError ? error.status : 500;
+    return NextResponse.json({ error: message }, { status: statusCode });
   }
 }
 
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await requireSessionApi();
-    const scope = await requireDataScope();
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
 
@@ -123,9 +106,8 @@ export async function DELETE(request: NextRequest) {
     const result = await deleteUserData(userId);
     return NextResponse.json(result);
   } catch (error) {
-    return NextResponse.json(
-      { error: (error as Error).message || "Erro interno." },
-      { status: (error as { statusCode?: number }).statusCode ?? 500 }
-    );
+    const message = error instanceof Error ? error.message : "Erro interno.";
+    const statusCode = error instanceof AppError ? error.status : 500;
+    return NextResponse.json({ error: message }, { status: statusCode });
   }
 }

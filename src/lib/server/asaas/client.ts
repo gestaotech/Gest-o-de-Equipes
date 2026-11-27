@@ -2,23 +2,25 @@
 
 import "server-only";
 
-const ASAAS_API_KEY = process.env.ASAAS_API_KEY;
 const ASAAS_ENVIRONMENT = process.env.ASAAS_ENVIRONMENT || "sandbox";
 const ASAAS_BASE_URL =
   ASAAS_ENVIRONMENT === "production"
     ? "https://api.asaas.com/v3"
     : "https://api-sandbox.asaas.com/v3";
 
-if (!ASAAS_API_KEY) {
-  throw new Error("ASAAS_API_KEY environment variable is not defined");
-}
 
 const api = async (endpoint: string, options: RequestInit = {}) => {
+  // Secrets are validated at request time, not during Next.js module collection.
+  const apiKey = process.env.ASAAS_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error("Integração Asaas não configurada: defina ASAAS_API_KEY no ambiente da aplicação.");
+  }
+
   const url = `${ASAAS_BASE_URL}${endpoint}`;
   const response = await fetch(url, {
     ...options,
     headers: {
-      Authorization: `Bearer ${ASAAS_API_KEY}`,
+      Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
       ...options.headers,
     },

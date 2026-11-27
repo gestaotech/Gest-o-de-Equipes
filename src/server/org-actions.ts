@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { createSession, requireSessionApi } from "@/lib/auth";
 import { handleAction, AppError, ok } from "@/lib/errors";
 import { orgSchema, onboardingSchema, orgUpdateSchema } from "@/lib/validations";
+import type { PlanTier } from "@prisma/client";
 import { ensureCatalogs } from "@/lib/catalog";
 import { slugify } from "@/lib/utils";
 import { getContext, guardRole } from "@/server/guards";
@@ -26,6 +27,12 @@ export async function createOrganization(input: unknown) {
   return handleAction(async () => {
     const session = await requireSessionApi();
     const data = orgSchema.parse(input);
+    const requestedTier = (input as { planTier?: unknown } | null)?.planTier;
+    if (requestedTier !== undefined && requestedTier !== "MENSAL" && requestedTier !== "ANUAL") {
+      throw new AppError("INVALID_PLAN", "Plano selecionado inválido.", 400);
+    }
+    const planTier = requestedTier as PlanTier | undefined;
+    await ensureCatalogs();
     const slug = data.slug?.trim() || (await uniqueSlug(data.name));
 
     const org = await prisma.$transaction(async (tx) => {
@@ -45,25 +52,27 @@ export async function createOrganization(input: unknown) {
           jobTitle: "Fundador",
         },
       });
-      // Assinatura criada na MESMA transação — org nunca fica sem plano.
-      const starter = await tx.plan.findUnique({
-        where: { tier: "MENSAL" },
-      });
-      if (starter) {
-        await tx.subscription.create({
-          data: {
-            organizationId: created.id,
-            planId: starter.id,
-            status: "ACTIVE",
-            currentPeriodStart: new Date(),
-            currentPeriodEnd: new Date(Date.now() + 30 * 86400000),
-          },
-        });
+      // Contratações pagas só recebem uma assinatura após o Asaas confirmar
+      // o pagamento pelo webhook. Cadastros gratuitos recebem período de teste.
+      if (!planTier) {
+        const starter = await tx.plan.findUnique({ where: { tier: "MENSAL" } });
+        if (starter) {
+          const trialEndsAt = new Date(Date.now() + 14 * 86400000);
+          await tx.subscription.create({
+            data: {
+              organizationId: created.id,
+              planId: starter.id,
+              status: "TRIALING",
+              currentPeriodStart: new Date(),
+              currentPeriodEnd: trialEndsAt,
+              trialDays: 14,
+              trialEndsAt,
+            },
+          });
+        }
       }
       return created;
     });
-
-    await ensureCatalogs();
 
     await logActivity({
       action: "organization.created",
@@ -164,7 +173,7 @@ export async function switchOrganization(orgId: string) {
   return handleAction(async () => {
     const session = await requireSessionApi();
     const membership = await prisma.organizationMember.findFirst({
-      where: { userId: session.sub, organizationId: orgId },
+      where: { userId: session.sub, organizationId: orgId, status: "ATIVO" },
     });
     if (!membership) {
       throw new AppError("FORBIDDEN", "Você não pertence a esta organização.", 403);

@@ -103,9 +103,20 @@ export async function GET(req: NextRequest) {
   if (range) where.createdAt = { gte: range.gte, lte: range.lte };
   if (action) where.action = action;
   if (entity) where.entity = entity;
-  // O filtro de userId também respeita o escopo: um MEMBER não busca a
-  // atividade de outra pessoa alterando o parâmetro.
-  if (userId) where.userId = userId;
+  // O filtro por usuário precisa validar a visibilidade antes de restringir
+  // a consulta; caso contrário, substituiria o escopo por um userId arbitrário.
+  if (userId) {
+    const canViewUser =
+      userId === session.sub ||
+      Boolean(await prisma.organizationMember.findFirst({
+        where: { ...visibleMembersWhere(scope), userId },
+        select: { userId: true },
+      }));
+    if (!canViewUser) {
+      return NextResponse.json({ error: "Você não pode consultar a atividade deste usuário." }, { status: 403 });
+    }
+    where.userId = userId;
+  }
   if (search) {
     // A busca entra em `AND` para NUNCA sobrescrever o `OR` de visibilidade.
     where.AND = [

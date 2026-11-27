@@ -25,7 +25,7 @@ import {
 import { ensureCatalogs } from "@/lib/catalog";
 import { logActivity } from "@/server/activity";
 import { issueAccountToken, consumeAccountToken } from "@/server/account-token";
-import { sendPasswordResetEmail } from "@/lib/email";
+import { isEmailConfigured, sendPasswordResetEmail } from "@/lib/email";
 import { decrypt } from "@/lib/encryption";
 import { validateTOTP, validateBackupCode } from "@/server/two-factor-actions";
 import { consumeAttempt, resetAttempts } from "@/lib/db-rate-limit";
@@ -52,6 +52,13 @@ export async function register(input: unknown) {
   return handleAction(async () => {
     const data = signUpSchema.parse(input);
     const email = normalizeEmail(data.email);
+    const meta = await sessionMeta();
+    await consumeAttempt(`register:${meta.ip ?? "unknown"}`, 5, 60 * 60 * 1000);
+
+    // Prepare global roles, permissions and plans before creating the account.
+    // If catalog initialization fails, do not leave an unusable user behind.
+    await ensureCatalogs();
+
     const exists = await prisma.user.findUnique({ where: { email } });
     if (exists) {
       throw new AppError("EMAIL_IN_USE", "Este e-mail já está cadastrado. Faça login.", 409);
@@ -63,7 +70,6 @@ export async function register(input: unknown) {
         passwordHash: await hashPassword(data.password),
       },
     });
-    await ensureCatalogs();
     await createSession({ sub: user.id, email: user.email, name: user.name }, await sessionMeta());
     return { id: user.id, name: user.name };
   });
@@ -73,12 +79,17 @@ export async function login(input: unknown) {
   return handleAction(async () => {
     const data = loginSchema.parse(input);
     const email = normalizeEmail(data.email);
+    const meta = await sessionMeta();
+    const attemptKey = `login:${email}:${meta.ip ?? "unknown"}`;
+    await consumeAttempt(attemptKey, 8, 15 * 60 * 1000);
+
     const user = await prisma.user.findUnique({ where: { email } });
     const valid =
       user && (await verifyPassword(data.password, user.passwordHash));
     if (!user || !valid) {
       throw new AppError("INVALID_CREDENTIALS", "E-mail ou senha incorretos.", 401);
     }
+    await resetAttempts(attemptKey);
 
     // Verificar se o usuário tem 2FA ativado
     const tfa = await prisma.userTwoFactor.findUnique({
@@ -232,7 +243,18 @@ export async function requestReset(input: unknown) {
   return handleAction(async () => {
     const data = forgotSchema.parse(input);
     const email = normalizeEmail(data.email);
-    
+    const meta = await sessionMeta();
+    await consumeAttempt(`password-reset:${email}:${meta.ip ?? "unknown"}`, 3, 15 * 60 * 1000);
+
+    // Falha de forma uniforme antes de consultar a conta, sem permitir enumeração.
+    if (!isEmailConfigured()) {
+      throw new AppError(
+        "EMAIL_UNAVAILABLE",
+        "A recuperação de senha está temporariamente indisponível. Entre em contato com o administrador.",
+        503
+      );
+    }
+
     // Busca usuário por e-mail
     const user = await prisma.user.findUnique({
       where: { email },
@@ -248,9 +270,7 @@ export async function requestReset(input: unknown) {
     // Isso automaticamente invalida quaisquer tokens anteriores do mesmo tipo
     const rawToken = await issueAccountToken(user.id, 'PASSWORD_RESET');
     
-    // Envia e-mail com link de redefinição
-    // Se o provedor não estiver configurado, o token é registrado em log (desenvolvimento)
-    // ou apenas documentado (produção), sem simular sucesso
+    // Envia e-mail com link de redefinição.
     await sendPasswordResetEmail(email, rawToken);
     
     return ok({ sent: true });
