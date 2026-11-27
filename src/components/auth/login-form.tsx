@@ -152,10 +152,7 @@ export function LoginForm({ next }: { next?: string }) {
           </Link>
         </div>
         <div className="mt-2 text-center text-sm text-muted-foreground">
-          Ainda não tem conta?{" "}
-          <Link href="/cadastro" className="font-medium text-blue-600 hover:underline">
-            Criar gratuitamente
-          </Link>
+          Acesso somente por convite. Solicite ao administrador da sua organização.
         </div>
       </CardContent>
     </Card>
